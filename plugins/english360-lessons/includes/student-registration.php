@@ -1,4 +1,164 @@
 <?php
+// Save booking context from hidden input to order item meta
+add_action('woocommerce_checkout_create_order_line_item', function($item, $cart_item_key, $values, $order) {
+if (!empty($_POST['e360_booking_ctx_checkout'])) {
+$ctx = json_decode(wp_unslash($_POST['e360_booking_ctx_checkout']), true);
+if (is_array($ctx)) {
+$course_id = $ctx['course_id'] ?? '';
+$course_title = !empty($course_id) ? get_the_title((int)$course_id) : '';
+$teacher = !empty($ctx['teacher_id']) ? get_user_by('id', (int)$ctx['teacher_id']) : null;
+$plan_title = !empty($ctx['plan_product_id']) && function_exists('wc_get_product') ?
+(wc_get_product($ctx['plan_product_id'])->get_name() ?? '') : '';
+$item->add_meta_data('e360_course_id', $course_id, true);
+$item->add_meta_data('Course', $course_title . ($course_id ? ' (ID ' . $course_id . ')' : ''));
+$item->add_meta_data('Teacher', $teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ?? '')));
+$item->add_meta_data('Date/time', ($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5));
+if ($plan_title) $item->add_meta_data('Package', $plan_title);
+$item->add_meta_data('Type', ($ctx['repeat'] ?? '') === 'once' ? 'One-time' : 'Weekly');
+}
+}
+}, 10, 4);
+
+
+// Show booking summary above order review on checkout
+add_action('woocommerce_checkout_before_order_review', function() {
+if (!function_exists('WC') || !WC()->cart) return;
+$ctx = null;
+foreach (WC()->cart->get_cart() as $cart_item) {
+if (!empty($cart_item['e360_booking_context'])) {
+$ctx = $cart_item['e360_booking_context'];
+break;
+}
+}
+if (!is_array($ctx) || empty($ctx)) return;
+$course_title = !empty($ctx['course_id']) ? get_the_title((int)$ctx['course_id']) : '';
+$teacher = !empty($ctx['teacher_id']) ? get_user_by('id', (int)$ctx['teacher_id']) : null;
+$plan_title = !empty($ctx['plan_product_id']) && function_exists('wc_get_product') ?
+(wc_get_product($ctx['plan_product_id'])->get_name() ?? '') : '';
+echo '<div id="e360-checkout-summary" style="padding:12px;border:1px solid #ddd;border-radius:10px;margin:12px 0;">';
+    echo '<div style="font-weight:600;margin-bottom:6px;">Your lesson request</div>';
+    echo '<div><strong>Course:</strong> ' . esc_html($course_title ?: ('#'.($ctx['course_id'] ?? ''))) . '</div>';
+    echo '<div><strong>Teacher:</strong> ' . esc_html($teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ??
+        ''))) . '</div>';
+    echo '<div><strong>Date/time:</strong> ' . esc_html(($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5)) .
+        '</div>';
+    if ($plan_title) echo '<div><strong>Package:</strong> ' . esc_html($plan_title) . '</div>';
+    echo '<div><strong>Type:</strong> ' . esc_html(($ctx['repeat'] ?? '') === 'once' ? 'One-time' : 'Weekly') . '</div>
+    ';
+    // Add hidden input with booking context JSON
+    echo '<input type="hidden" name="e360_booking_ctx_checkout" value="' . esc_attr(json_encode($ctx)) . '" />';
+    echo '</div>';
+
+// JS to auto-select course in course dropdown if present
+if (!empty($ctx['course_id'])) {
+?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var sel = document.getElementById('e360_course_id');
+    if (sel) {
+        sel.value = '<?php echo esc_js($ctx['course_id']); ?>';
+        if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
+            jQuery(sel).trigger('change.select2');
+        }
+    }
+});
+</script>
+<?php
+    }
+});
+// Restore booking context for cart item on checkout page load
+add_action('woocommerce_before_checkout_form', function() {
+    if (!is_user_logged_in()) return;
+    $user_id = get_current_user_id();
+    $ctx = get_user_meta($user_id, 'e360_booking_context', true);
+    if (!is_array($ctx) || empty($ctx)) return;
+    $cart = WC()->cart;
+    if (!$cart) return;
+    foreach ($cart->get_cart() as $cart_item_key => $cart_item) {
+        if (empty($cart_item['e360_booking_context'])) {
+            WC()->cart->cart_contents[$cart_item_key]['e360_booking_context'] = $ctx;
+        }
+    }
+});
+
+// Add booking context to cart item meta
+add_filter('woocommerce_add_cart_item_data', function($cart_item_data, $product_id, $variation_id) {
+// Try to get booking context from POST
+$ctx = null;
+if (!empty($_POST['e360_booking_ctx'])) {
+$raw = wp_unslash($_POST['e360_booking_ctx']);
+$ctx = json_decode($raw, true);
+}
+if (!is_array($ctx) || !$ctx) {
+$course_id = isset($_POST['e360_course_id']) ? (int) $_POST['e360_course_id'] : (isset($_POST['course_id']) ? (int)
+$_POST['course_id'] : 0);
+$teacher_id = isset($_POST['e360_teacher_id']) ? (int) $_POST['e360_teacher_id'] : (isset($_POST['teacher_id']) ? (int)
+$_POST['teacher_id'] : 0);
+$date = isset($_POST['e360_booking_date']) ? sanitize_text_field(wp_unslash($_POST['e360_booking_date'])) :
+(isset($_POST['date']) ? sanitize_text_field(wp_unslash($_POST['date'])) : '');
+$time = isset($_POST['e360_booking_time']) ? sanitize_text_field(wp_unslash($_POST['e360_booking_time'])) :
+(isset($_POST['time']) ? sanitize_text_field(wp_unslash($_POST['time'])) : '');
+$language_term_id = isset($_POST['e360_term_id']) ? (int) $_POST['e360_term_id'] : (isset($_POST['language_term_id']) ?
+(int) $_POST['language_term_id'] : 0);
+$level_term_id = isset($_POST['level_term_id']) ? (int) $_POST['level_term_id'] : (isset($_POST['e360_level_id']) ?
+(int) $_POST['e360_level_id'] : 0);
+$plan_product_id = isset($_POST['plan_product_id']) ? (int) $_POST['plan_product_id'] : (isset($_POST['plan']) ? (int)
+$_POST['plan'] : 0);
+$duration = isset($_POST['duration']) ? (int) $_POST['duration'] : 60;
+$repeat = isset($_POST['repeat']) ? sanitize_text_field($_POST['repeat']) : 'weekly';
+if ($course_id && $teacher_id && $date && $time) {
+$ctx = [
+'language_term_id' => $language_term_id,
+'level_term_id' => $level_term_id,
+'course_id' => $course_id,
+'teacher_id' => $teacher_id,
+'date' => $date,
+'time' => $time,
+'plan_product_id' => $plan_product_id,
+'duration' => $duration,
+'repeat' => $repeat,
+];
+}
+}
+if (is_array($ctx) && $ctx) {
+$cart_item_data['e360_booking_context'] = $ctx;
+}
+return $cart_item_data;
+}, 10, 3);
+
+// Display booking context in cart and checkout
+add_filter('woocommerce_get_item_data', function($item_data, $cart_item) {
+if (isset($cart_item['e360_booking_context']) && is_array($cart_item['e360_booking_context'])) {
+$ctx = $cart_item['e360_booking_context'];
+$course_title = !empty($ctx['course_id']) ? get_the_title((int)$ctx['course_id']) : '';
+$teacher = !empty($ctx['teacher_id']) ? get_user_by('id', (int)$ctx['teacher_id']) : null;
+$item_data[] = [
+'name' => 'Course',
+'value' => esc_html($course_title ?: ('#'.($ctx['course_id'] ?? '')))
+];
+$item_data[] = [
+'name' => 'Teacher',
+'value' => esc_html($teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ?? '')))
+];
+$item_data[] = [
+'name' => 'Date/time',
+'value' => esc_html(($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5))
+];
+if (!empty($ctx['plan_product_id'])) {
+$plan_title = function_exists('wc_get_product') ? (wc_get_product($ctx['plan_product_id'])->get_name() ?? '') : '';
+$item_data[] = [
+'name' => 'Package',
+'value' => esc_html($plan_title)
+];
+}
+$item_data[] = [
+'name' => 'Type',
+'value' => esc_html(($ctx['repeat'] ?? '') === 'once' ? 'One-time' : 'Weekly')
+];
+}
+return $item_data;
+}, 10, 2);
+
 add_action('wp_ajax_e360_get_courses_by_term', 'e360_get_courses_by_term');
 add_action('wp_ajax_nopriv_e360_get_courses_by_term', 'e360_get_courses_by_term');
 
@@ -512,8 +672,12 @@ jQuery(function($) {
     }
 
     function loadLevels(languageTermId) {
+        resetAfterLevel();
         $('#e360-step-level').show();
         $('#e360-level').html('<div style="opacity:.7">Loading…</div>');
+        // Не показываем блок Course/Loading… до выбора уровня
+        $('#e360-step-course').hide();
+        $('#e360-course').html('<div style="opacity:.7">Select level first…</div>');
 
         $.post(ajaxurl, {
             action: 'e360_get_child_terms',
@@ -535,12 +699,14 @@ jQuery(function($) {
             let html = '';
             items.forEach(function(it) {
                 html +=
-                    `<div class="e360-level-card" data-term-id="${it.term_id}" style="border:1px solid #ddd;border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;gap:8px;">` +
-                    `<div style="flex:1;font-weight:600;">${$('<div>').text(it.name).html()}</div>` +
+                    `<div class=\"e360-level-card\" data-term-id=\"${it.term_id}\" style=\"border:1px solid rgb(221, 221, 221);border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;gap:8px;\">` +
+                    `<div style=\"flex:1;font-weight:600;\">${$('<div>').text(it.name).html()}</div>` +
                     `</div>`;
             });
 
             $('#e360-level').html(html);
+            // Сбросить бордер у всех карточек уровня после ajax
+            $('.e360-level-card').css('border', '1px solid rgb(221, 221, 221)');
         });
     }
 
@@ -621,8 +787,14 @@ jQuery(function($) {
     // Step 1: language (cards)
     $(document).on('click', '.e360-language-card', function() {
         resetAfterLanguage();
-        $('.e360-language-card').css('border-color', '#ddd');
-        $(this).css('border-color', '#333');
+        $('.e360-language-card').css('border-color', '#ddd').removeClass('e360-language-selected');
+        $(this).css('border-color', '#3e64de').addClass('e360-language-selected');
+        console.log('LANGUAGE CLICKED', $(this).data('term-id'));
+
+        // Скрыть блок Course до выбора уровня
+        $('#e360-step-course').hide();
+        // Сбросить контент и показать заглушку
+        $('#e360-course').html('<div style="opacity:.7">Select level first…</div>');
 
         const langId = parseInt($(this).data('term-id'), 10) || 0;
         if (!langId) return;
@@ -632,8 +804,28 @@ jQuery(function($) {
 
     // Step 2: level (cards)
     $(document).on('click', '.e360-level-card', function() {
-        $('.e360-level-card').css('border-color', '#ddd');
-        $(this).css('border-color', '#333');
+        // Сбросить стиль и класс у всех карточек уровня
+        $('.e360-level-card').each(function() {
+            $(this).attr('style',
+                'border:1px solid rgb(221, 221, 221);border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;gap:8px;'
+            ).removeClass('e360-level-selected');
+        });
+        // Выделить выбранную
+        $(this).attr('style',
+            'border:1px solid rgb(62, 100, 222);border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;gap:8px;'
+        ).addClass('e360-level-selected');
+        console.log('LEVEL CLICKED', $(this).data('term-id'), 'style:', $(this).attr('style'));
+        // Повторно применить стиль через 100мс (если DOM обновляется)
+        var $el = $(this);
+        setTimeout(function() {
+            $el.attr('style',
+                'border:1px solid rgb(62, 100, 222);border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;gap:8px;'
+            );
+            console.log('LEVEL STYLE REAPPLIED', $el.data('term-id'), $el.attr('style'));
+        }, 100);
+        // Показать блок Course после выбора уровня и показать лоадер
+        $('#e360-step-course').show();
+        $('#e360-course').html('<div style="opacity:.7">Loading…</div>');
 
         const levelId = parseInt($(this).data('term-id'), 10) || 0;
         selected.level_term_id = levelId || null;
@@ -646,6 +838,8 @@ jQuery(function($) {
         const courseKey = $(this).data('course-key') || '';
         selected.course_key = courseKey || null;
 
+        $('.e360-course-card').css('border-color', '#ddd');
+        $(this).css('border-color', '#3e64de');
         // reset selection
         selected.course_id = null;
         selected.teacher_id = null;
@@ -686,7 +880,7 @@ jQuery(function($) {
                 '';
 
             const role = v.teacher_role ?
-                `<div style="font-size:12px;opacity:.7;margin-top:2px;">${$('<div>').text(v.teacher_role).html()}</div>` :
+                `` :
                 '';
 
             const bioBtn = fullBioSafe ?
@@ -754,7 +948,7 @@ jQuery(function($) {
         // card click = select teacher
         $(document).off('click.e360card').on('click.e360card', '.e360-teacher-card', function() {
             $('.e360-teacher-card').css('border-color', '#ddd');
-            $(this).css('border-color', '#333');
+            $(this).css('border-color', '#3e64de');
 
             const teacherId = parseInt($(this).data('teacher-id'), 10) || 0;
             const courseId = parseInt($(this).data('course-id'), 10) || 0;
@@ -824,7 +1018,7 @@ jQuery(function($) {
         $(document).on('click', '.e360-teacher-card', function() {
             // визуально выделяем
             $('.e360-teacher-card').css('border-color', '#ddd');
-            $(this).css('border-color', '#333');
+            $(this).css('border-color', '#3e64de');
 
             const teacherId = parseInt($(this).data('teacher-id'), 10) || 0;
             const courseId = parseInt($(this).data('course-id'), 10) || 0;
@@ -1279,7 +1473,7 @@ function e360_get_plans() {
 
         // НЕ отбрасываем purchasable — иногда плагины/подписки дают false в неожиданных местах
         $price_html = $product->get_price_html();
-        $price_text = trim(wp_strip_all_tags($price_html));
+        $price_text = html_entity_decode(trim(wp_strip_all_tags($price_html)));
 
         $items[] = [
             'product_id' => (int) $pid,
