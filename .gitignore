@@ -1,0 +1,16 @@
+
+themes/ellen/
+
+# WordPress junk
+wp-config.php
+info.txt
+login.txt
+
+test.html
+
+# common junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
