@@ -304,7 +304,40 @@ function e360_get_slots() {
         ? e360_generate_slots_for_teacher_date($teacher_id, $date, $duration)
         : [];
 
-    wp_send_json_success(['slots' => $slots]);
+    // Determine student timezone (viewer)
+    $viewer_id = get_current_user_id();
+    $resolve_user_tz = function($uid) {
+        if (!$uid) return (function_exists('wp_timezone_string') ? wp_timezone_string() : 'UTC');
+        $tz = get_user_option('timezone_string', $uid);
+        if ($tz && in_array($tz, timezone_identifiers_list(), true)) return $tz;
+        return (function_exists('wp_timezone_string') ? wp_timezone_string() : 'UTC');
+    };
+    $student_tz = $resolve_user_tz($viewer_id);
+
+    // Get teacher timezone
+    if (!function_exists('e360_get_teacher_timezone_string')) {
+        function e360_get_teacher_timezone_string($uid) {
+            $tz = get_user_option('timezone_string', $uid);
+            if ($tz && in_array($tz, timezone_identifiers_list(), true)) return $tz;
+            return (function_exists('wp_timezone_string') ? wp_timezone_string() : 'UTC');
+        }
+    }
+    $teacher_tz = e360_get_teacher_timezone_string($teacher_id);
+
+    $times = [];
+    foreach ((array)$slots as $s) {
+        $t = e360_slot_hhmm($s);
+        if ($t === '') continue;
+        try {
+            $dtTeacher = new DateTimeImmutable($date . ' ' . $t, new DateTimeZone($teacher_tz));
+            $dtStudent = $dtTeacher->setTimezone(new DateTimeZone($student_tz));
+            $times[] = $dtStudent->format('H:i');
+        } catch (Exception $e) {
+            $times[] = $t;
+        }
+    }
+
+    wp_send_json_success(['slots' => $times]);
 }
 add_shortcode('e360_booking_wizard', function($atts){
     $atts = shortcode_atts([
@@ -762,11 +795,15 @@ jQuery(function($) {
                     '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;">';
 
                 data.days.forEach(function(d) {
+                    const dateObj = new Date(d.date);
+                    const weekday = dateObj.toLocaleDateString('en-US', {
+                        weekday: 'short'
+                    });
                     const day = d.date.slice(5); // MM-DD
                     const times = (d.times && d.times.length) ? d.times.join(
                         ', ') : '—';
                     s += `<div style="border:1px solid #eee;border-radius:10px;padding:6px;">
-                        <div style="font-size:12px;opacity:.8;">${day}</div>
+                        <div style="font-size:12px;opacity:.8;">${weekday}, ${day}</div>
                         <div style="font-size:12px;">${times}</div>
                       </div>`;
                 });
@@ -1500,6 +1537,40 @@ add_action('woocommerce_checkout_create_order', function($order){
     if ($birth !== '') $order->update_meta_data('_e360_birthdate', $birth);
     $order->update_meta_data('_e360_has_whatsapp', $has_whatsapp);
     if ($wa_number !== '') $order->update_meta_data('_e360_whatsapp_number', $wa_number);
+    
+    // Save booking context to order meta
+    $ctx = null;
+    if (!empty($_POST['e360_booking_ctx'])) {
+        $raw = wp_unslash($_POST['e360_booking_ctx']);
+        $ctx = json_decode($raw, true);
+    }
+    if (!is_array($ctx) || !$ctx) {
+        $course_id = isset($_POST['e360_course_id']) ? (int) $_POST['e360_course_id'] : (isset($_POST['course_id']) ? (int) $_POST['course_id'] : 0);
+        $teacher_id = isset($_POST['e360_teacher_id']) ? (int) $_POST['e360_teacher_id'] : (isset($_POST['teacher_id']) ? (int) $_POST['teacher_id'] : 0);
+        $date = isset($_POST['e360_booking_date']) ? sanitize_text_field(wp_unslash($_POST['e360_booking_date'])) : (isset($_POST['date']) ? sanitize_text_field(wp_unslash($_POST['date'])) : '');
+        $time = isset($_POST['e360_booking_time']) ? sanitize_text_field(wp_unslash($_POST['e360_booking_time'])) : (isset($_POST['time']) ? sanitize_text_field(wp_unslash($_POST['time'])) : '');
+        $language_term_id = isset($_POST['e360_term_id']) ? (int) $_POST['e360_term_id'] : (isset($_POST['language_term_id']) ? (int) $_POST['language_term_id'] : 0);
+        $level_term_id = isset($_POST['level_term_id']) ? (int) $_POST['level_term_id'] : (isset($_POST['e360_level_id']) ? (int) $_POST['e360_level_id'] : 0);
+        $plan_product_id = isset($_POST['plan_product_id']) ? (int) $_POST['plan_product_id'] : (isset($_POST['plan']) ? (int) $_POST['plan'] : 0);
+        $duration = isset($_POST['duration']) ? (int) $_POST['duration'] : 60;
+        $repeat = isset($_POST['repeat']) ? sanitize_text_field($_POST['repeat']) : 'weekly';
+        if ($course_id && $teacher_id && $date && $time) {
+            $ctx = [
+                'language_term_id' => $language_term_id,
+                'level_term_id'    => $level_term_id,
+                'course_id'        => $course_id,
+                'teacher_id'       => $teacher_id,
+                'date'             => $date,
+                'time'             => $time,
+                'plan_product_id'  => $plan_product_id,
+                'duration'         => $duration,
+                'repeat'           => $repeat,
+            ];
+        }
+    }
+    if (is_array($ctx) && $ctx) {
+        $order->update_meta_data('_e360_booking_context', $ctx);
+    }
 
 }, 20, 1);
 
@@ -1534,6 +1605,24 @@ add_action('woocommerce_admin_order_data_after_billing_address', function($order
     if ($birth) echo '<p><strong>Birthday:</strong> ' . esc_html($birth) . '</p>';
     echo '<p><strong>Has WhatsApp:</strong> ' . esc_html($has === 'yes' ? 'Yes' : 'No') . '</p>';
     if ($wa)    echo '<p><strong>WhatsApp number:</strong> ' . esc_html($wa) . '</p>';
+    
+    $ctx = $order->get_meta('_e360_booking_context');
+    // Show booking context
+    if (is_array($ctx) && !empty($ctx)) {
+        echo '<div style="margin-top:10px;">';
+        echo '<strong>Booking details:</strong><br>';
+        $course_title = !empty($ctx['course_id']) ? get_the_title((int)$ctx['course_id']) : '';
+        $teacher = !empty($ctx['teacher_id']) ? get_user_by('id', (int)$ctx['teacher_id']) : null;
+        echo '<p><strong>Course:</strong> ' . esc_html($course_title ?: ('#'.($ctx['course_id'] ?? ''))) . '</p>';
+        echo '<p><strong>Teacher:</strong> ' . esc_html($teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ?? ''))) . '</p>';
+        echo '<p><strong>Date/time:</strong> ' . esc_html(($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5)) . '</p>';
+        if (!empty($ctx['plan_product_id'])) {
+            $plan_title = function_exists('wc_get_product') ? (wc_get_product($ctx['plan_product_id'])->get_name() ?? '') : '';
+            echo '<p><strong>Package:</strong> ' . esc_html($plan_title) . '</p>';
+        }
+        echo '<p><strong>Type:</strong> ' . esc_html(($ctx['repeat'] ?? '') === 'once' ? 'One-time' : 'Weekly') . '</p>';
+        echo '</div>';
+    }
     echo '</div>';
 
 });

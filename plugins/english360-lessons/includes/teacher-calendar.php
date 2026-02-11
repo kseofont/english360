@@ -48,6 +48,27 @@ function e360_render_teacher_timezone_profile_field($user){
     if (!user_can($user, 'tutor_instructor') && !user_can($user, 'manage_options')) return;
 
     $current = e360_get_teacher_timezone_string((int)$user->ID);
+    // Список основных городов по часовым поясам
+    $main_timezones = [
+        'Pacific/Honolulu' => 'Honolulu',
+        'America/Anchorage' => 'Anchorage',
+        'America/Los_Angeles' => 'Los Angeles',
+        'America/Denver' => 'Denver',
+        'America/Chicago' => 'Chicago',
+        'America/New_York' => 'New York',
+        'America/Sao_Paulo' => 'São Paulo',
+        'Europe/London' => 'London',
+        'Europe/Berlin' => 'Berlin',
+        'Europe/Moscow' => 'Moscow',
+        'Asia/Dubai' => 'Dubai',
+        'Asia/Kolkata' => 'Kolkata',
+        'Asia/Bangkok' => 'Bangkok',
+        'Asia/Hong_Kong' => 'Hong Kong',
+        'Asia/Tokyo' => 'Tokyo',
+        'Australia/Sydney' => 'Sydney',
+        'Pacific/Auckland' => 'Auckland',
+        'Africa/Johannesburg' => 'Johannesburg',
+    ];
     ?>
 <h2>English360</h2>
 <table class="form-table" role="presentation">
@@ -55,7 +76,10 @@ function e360_render_teacher_timezone_profile_field($user){
         <th><label for="e360_teacher_timezone">Teacher timezone</label></th>
         <td>
             <select name="e360_teacher_timezone" id="e360_teacher_timezone" class="regular-text">
-                <?php echo wp_timezone_choice($current); ?>
+                <?php foreach ($main_timezones as $tz => $city): ?>
+                <option value="<?php echo esc_attr($tz); ?>" <?php selected($current, $tz); ?>>
+                    <?php echo esc_html($city . ' (' . $tz . ')'); ?></option>
+                <?php endforeach; ?>
             </select>
             <p class="description">Used for availability, bookings, and displaying lesson times.</p>
         </td>
@@ -183,8 +207,79 @@ add_shortcode('e360_teacher_calendar_settings', function(){
 
         <div style="margin:0 0 10px;">
             <label style="display:block;font-weight:600;margin-bottom:6px;">Your timezone</label>
+            <?php
+            // Ручной curated список городов по поясам, без российских, с канадскими для Америки, европейскими для Европы, Киев для UTC+2
+            // По одному городу на каждый часовой пояс от UTC-12 до UTC+12 (без российских городов)
+            $curated_timezones = [
+                // UTC-12
+                'Etc/GMT+12' => 'Baker Island',
+                // UTC-11
+                'Pacific/Pago_Pago' => 'Pago Pago',
+                // UTC-10
+                'Pacific/Honolulu' => 'Honolulu',
+                // UTC-9
+                'America/Anchorage' => 'Anchorage',
+                // UTC-8
+                'America/Vancouver' => 'Vancouver',
+                // UTC-7
+                'America/Edmonton' => 'Edmonton',
+                // UTC-6
+                'America/Winnipeg' => 'Winnipeg',
+                // UTC-5
+                'America/Toronto' => 'Toronto',
+                // UTC-4
+                'America/Halifax' => 'Halifax',
+                // UTC-3
+                'America/Sao_Paulo' => 'São Paulo',
+                // UTC-2
+                'America/Noronha' => 'Noronha',
+                // UTC-1
+                'Atlantic/Azores' => 'Azores',
+                // UTC+0
+                'Europe/Lisbon' => 'Lisbon',
+                // UTC+1
+                'Europe/Berlin' => 'Berlin',
+                // UTC+2
+                'Europe/Kyiv' => 'Kyiv',
+                // UTC+3
+                'Europe/Minsk' => 'Minsk',
+                // UTC+4
+                'Asia/Dubai' => 'Dubai',
+                // UTC+5
+                'Asia/Karachi' => 'Karachi',
+                // UTC+6
+                'Asia/Almaty' => 'Almaty',
+                // UTC+7
+                'Asia/Bangkok' => 'Bangkok',
+                // UTC+8
+                'Asia/Hong_Kong' => 'Hong Kong',
+                // UTC+9
+                'Asia/Tokyo' => 'Tokyo',
+                // UTC+10
+                'Australia/Sydney' => 'Sydney',
+                // UTC+11
+                'Pacific/Noumea' => 'Noumea',
+                // UTC+12
+                'Pacific/Auckland' => 'Auckland',
+            ];
+            ?>
             <select class="e360-tz" style="min-width:320px;">
-                <?php echo wp_timezone_choice($tz); ?>
+                <?php foreach ($curated_timezones as $tz_id => $city):
+                    try {
+                        $dtz = new DateTimeZone($tz_id);
+                        $now = new DateTime('now', $dtz);
+                        $offset = $dtz->getOffset($now);
+                        $hours = (int)($offset / 3600);
+                        $minutes = abs($offset % 3600) / 60;
+                        $sign = $hours >= 0 ? '+' : '-';
+                        $offset_str = sprintf('UTC%s%02d%s', $sign, abs($hours), $minutes ? ':' . sprintf('%02d', $minutes) : '');
+                    } catch (Exception $e) {
+                        $offset_str = '';
+                    }
+                ?>
+                <option value="<?php echo esc_attr($tz_id); ?>" <?php selected($tz, $tz_id); ?>>
+                    <?php echo esc_html($city . ' (' . $offset_str . ')'); ?></option>
+                <?php endforeach; ?>
             </select>
         </div>
 
