@@ -33,6 +33,14 @@ function e360_student_is_enrolled_safe(int $student_id, int $course_id): bool {
 }
 
 function e360_student_next_lesson_ts(int $student_id, int $course_id): int {
+    if (function_exists('e360_find_booking_for_student_course')) {
+        $booking_id = (int) e360_find_booking_for_student_course($student_id, $course_id);
+        if ($booking_id && function_exists('e360_booking_next_occurrence_ts')) {
+            $ts = (int) e360_booking_next_occurrence_ts($booking_id);
+            if ($ts > 0) return $ts;
+        }
+    }
+
     $key = 'e360_schedule_events_' . $course_id;
     $events = get_user_meta($student_id, $key, true);
     if (!is_array($events)) return 0;

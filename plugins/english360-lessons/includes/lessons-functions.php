@@ -317,20 +317,41 @@ function e360_sync_primary_teacher_on_enrol($enrol_id, $new_status) {
         return;
     }
 
-    // Основной учитель курса = author курса
-    $teacher_id = (int) get_post_field('post_author', $course_id);
+    // Prefer teacher selected during booking, if this teacher belongs to the course.
+    $teacher_id = 0;
+    $ctx = get_user_meta($student_id, 'e360_booking_context', true);
+    if (is_array($ctx) && !empty($ctx)) {
+        $ctx_course_id = (int)($ctx['course_id'] ?? 0);
+        $ctx_teacher_id = (int)($ctx['teacher_id'] ?? 0);
+        if ($ctx_course_id === $course_id && $ctx_teacher_id > 0) {
+            $allowed_ids = function_exists('e360_get_course_instructor_ids')
+                ? e360_get_course_instructor_ids($course_id)
+                : [];
+            if (in_array($ctx_teacher_id, $allowed_ids, true)) {
+                $teacher_id = $ctx_teacher_id;
+            }
+        }
+    }
+
+    if (!$teacher_id) {
+        $teacher_id = (int) get_post_field('post_author', $course_id);
+    }
     if (!$teacher_id) {
         return;
     }
 
-    // Если хочешь НЕ перетирать существующую привязку — раскомментируй:
-    // if ((int) get_user_meta($student_id, 'e360_primary_teacher_id', true)) return;
-    if (!(int)get_user_meta($student_id, 'e360_primary_course_id', true)) {
-                     update_user_meta($student_id, 'e360_primary_course_id',  $course_id);
-    }
-    if (!(int)get_user_meta($student_id, 'e360_primary_teacher_id', true)) {
-                        update_user_meta($student_id, 'e360_primary_teacher_id', $teacher_id);
+    // Enrollment is authoritative for this course.
+    update_user_meta($student_id, 'e360_primary_course_id', $course_id);
+    update_user_meta($student_id, 'e360_primary_teacher_id', $teacher_id);
 
+    // Ensure chosen slot is reserved after enrollment.
+    if (function_exists('e360_find_booking_for_student_course') && function_exists('e360_create_booking_from_context')) {
+        $exists = e360_find_booking_for_student_course($student_id, $course_id);
+        if (!$exists && is_array($ctx) && !empty($ctx)) {
+            $ctx['course_id'] = $course_id;
+            $ctx['teacher_id'] = $teacher_id;
+            e360_create_booking_from_context($student_id, $ctx, ['require_credit' => false]);
+        }
     }
 
    

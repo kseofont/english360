@@ -21,6 +21,38 @@ function e360_get_credits_balance(int $student_id, int $course_id): int {
     return max(0, e360_get_credits_total($student_id, $course_id) - e360_get_credits_used($student_id, $course_id));
 }
 
+function e360_get_product_credits_qty(int $product_id): int {
+    if ($product_id <= 0) return 0;
+
+    $keys = [
+        'e360_credits',
+        'e360_credits_qty',
+        'credits_lessons_granted',
+        'credits_lessons',
+        'lessons_granted',
+    ];
+
+    foreach ($keys as $k) {
+        $v = (int) get_post_meta($product_id, $k, true);
+        if ($v > 0) return $v;
+    }
+
+    if (function_exists('get_field')) {
+        $acf_keys = [
+            'e360_credits',
+            'credits_lessons_granted',
+            'credits_lessons',
+            'e360_credits_qty',
+        ];
+        foreach ($acf_keys as $k) {
+            $v = (int) get_field($k, $product_id);
+            if ($v > 0) return $v;
+        }
+    }
+
+    return 0;
+}
+
 /**
  * Add credits (admin / order). Does NOT touch used.
  */
@@ -108,31 +140,74 @@ function e360_apply_order_credits($order_id) {
     $user_id = (int) $order->get_user_id();
     if (!$user_id) return;
 
-    // курс берём из привязки студента (ты уже сохраняешь)
-    $course_id = (int) get_user_meta($user_id, 'e360_primary_course_id', true);
-    if (!$course_id) return;
+    $order_ctx = $order->get_meta('_e360_booking_context');
+    if (!is_array($order_ctx)) $order_ctx = [];
+    $ctx_course_id = (int)($order_ctx['course_id'] ?? 0);
 
-    // защита от повторного начисления по одному заказу/курсу
-    $flag = 'e360_credits_applied_' . $order_id . '_' . $course_id;
-    if (get_user_meta($user_id, $flag, true)) return;
-
-    $total_added = 0;
+    // aggregate credits per course from line items
+    $per_course = [];
 
     foreach ($order->get_items() as $item) {
         $product = $item->get_product();
         if (!$product) continue;
 
+        $product_id = (int) $product->get_id();
         $qty = (int) $item->get_quantity();
-        $credits_per = (int) get_post_meta($product->get_id(), 'e360_credits_qty', true);
+        if ($qty <= 0) $qty = 1;
+        $credits_per = e360_get_product_credits_qty($product_id);
 
         if ($credits_per <= 0) continue;
 
-        $add = $credits_per * max(1, $qty);
-        $total_added += $add;
+        $course_id = (int) $item->get_meta('e360_course_id', true);
+        if ($course_id <= 0) $course_id = $ctx_course_id;
+        if ($course_id <= 0) $course_id = (int) get_user_meta($user_id, 'e360_primary_course_id', true);
+        if ($course_id <= 0) continue;
+
+        if (!isset($per_course[$course_id])) $per_course[$course_id] = 0;
+        $per_course[$course_id] += ($credits_per * $qty);
     }
 
-    if ($total_added > 0) {
+    foreach ($per_course as $course_id => $total_added) {
+        $course_id = (int) $course_id;
+        $total_added = (int) $total_added;
+        if ($course_id <= 0 || $total_added <= 0) continue;
+
+        // idempotency per order/course
+        $flag = 'e360_credits_applied_' . $order_id . '_' . $course_id;
+        if (get_user_meta($user_id, $flag, true)) continue;
+
         e360_add_credits($user_id, $course_id, $total_added, 'Woo order #' . $order_id);
         update_user_meta($user_id, $flag, 1);
     }
 }
+
+function e360_reconcile_paid_orders_credits_for_user(int $user_id, int $limit = 200): void {
+    if ($user_id <= 0 || !function_exists('wc_get_orders')) return;
+
+    $orders = wc_get_orders([
+        'customer_id' => $user_id,
+        'status' => ['processing', 'completed'],
+        'limit' => $limit,
+        'orderby' => 'date',
+        'order' => 'DESC',
+        'return' => 'ids',
+    ]);
+    if (!$orders) return;
+
+    foreach ($orders as $oid) {
+        e360_apply_order_credits((int)$oid);
+    }
+}
+
+add_action('tutor/course/enrol_status_change', function($enrol_id, $new_status){
+    $status = strtolower((string)$new_status);
+    if (!in_array($status, ['approved', 'completed', 'publish'], true)) return;
+
+    $enrol = get_post((int)$enrol_id);
+    if (!$enrol || $enrol->post_type !== 'tutor_enrolled') return;
+
+    $student_id = (int)$enrol->post_author;
+    if ($student_id <= 0) return;
+
+    e360_reconcile_paid_orders_credits_for_user($student_id);
+}, 30, 2);

@@ -18,6 +18,35 @@ function e360_on_order_paid($order_id) {
         return;
     }
 
+    // Sync selected booking date/time from checkout into user profile and booking storage.
+    $ctx = $order->get_meta('_e360_booking_context');
+    if (is_array($ctx) && !empty($ctx)) {
+        $clean = [
+            'language_term_id' => (int)($ctx['language_term_id'] ?? 0),
+            'level_term_id'    => (int)($ctx['level_term_id'] ?? 0),
+            'course_id'        => (int)($ctx['course_id'] ?? 0),
+            'teacher_id'       => (int)($ctx['teacher_id'] ?? 0),
+            'date'             => sanitize_text_field((string)($ctx['date'] ?? '')),
+            'time'             => sanitize_text_field((string)($ctx['time'] ?? '')),
+            'plan_product_id'  => (int)($ctx['plan_product_id'] ?? 0),
+            'duration'         => (int)($ctx['duration'] ?? 60),
+            'repeat'           => (($ctx['repeat'] ?? '') === 'once') ? 'once' : 'weekly',
+            'booking_format'   => function_exists('e360_resolve_booking_format') ? e360_resolve_booking_format($ctx) : sanitize_key((string)($ctx['booking_format'] ?? '')),
+            'created_at'       => current_time('mysql'),
+        ];
+
+        if ($clean['course_id'] > 0 && $clean['teacher_id'] > 0 && $clean['date'] !== '' && $clean['time'] !== '') {
+            update_user_meta($user_id, 'e360_booking_context', $clean);
+            update_user_meta($user_id, 'e360_primary_course_id', $clean['course_id']);
+            update_user_meta($user_id, 'e360_primary_teacher_id', $clean['teacher_id']);
+
+            if (function_exists('e360_create_booking_from_context')) {
+                // Reserve slot immediately after payment; function is deduplicated by student+course.
+                e360_create_booking_from_context($user_id, $clean, ['require_credit' => false]);
+            }
+        }
+    }
+
     global $wpdb;
     $entitlements = $wpdb->prefix . 'e360_entitlements';
 

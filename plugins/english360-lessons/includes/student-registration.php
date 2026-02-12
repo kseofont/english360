@@ -1,4 +1,45 @@
 <?php
+function e360_resolve_booking_format(array $ctx): string {
+    $format = sanitize_key((string) ($ctx['booking_format'] ?? ''));
+    if (in_array($format, ['trial', 'package', 'single'], true)) return $format;
+
+    $plan_product_id = (int) ($ctx['plan_product_id'] ?? 0);
+    if ($plan_product_id > 0) {
+        $ptype = sanitize_key((string) get_post_meta($plan_product_id, 'e360_product_type', true));
+        if (in_array($ptype, ['trial', 'package', 'single'], true)) {
+            return $ptype === 'single' ? 'single' : ($ptype === 'trial' ? 'trial' : 'package');
+        }
+    }
+
+    return '';
+}
+
+function e360_booking_format_label(string $format): string {
+    if ($format === 'trial') return 'Trial lesson';
+    if ($format === 'single') return 'Single lesson';
+    if ($format === 'package') return 'Package';
+    return '';
+}
+
+function e360_product_credits_for_display(int $product_id): int {
+    if ($product_id <= 0) return 0;
+
+    if (function_exists('e360_get_product_credits_qty')) {
+        $v = (int) e360_get_product_credits_qty($product_id);
+        if ($v > 0) return $v;
+    }
+
+    $v = (int) get_post_meta($product_id, 'e360_credits', true);
+    if ($v > 0) return $v;
+
+    if (function_exists('get_field')) {
+        $v = (int) get_field('e360_credits', $product_id);
+        if ($v > 0) return $v;
+    }
+
+    return 0;
+}
+
 // Save booking context from hidden input to order item meta
 add_action('woocommerce_checkout_create_order_line_item', function($item, $cart_item_key, $values, $order) {
 if (!empty($_POST['e360_booking_ctx_checkout'])) {
@@ -9,11 +50,15 @@ $course_title = !empty($course_id) ? get_the_title((int)$course_id) : '';
 $teacher = !empty($ctx['teacher_id']) ? get_user_by('id', (int)$ctx['teacher_id']) : null;
 $plan_title = !empty($ctx['plan_product_id']) && function_exists('wc_get_product') ?
 (wc_get_product($ctx['plan_product_id'])->get_name() ?? '') : '';
+$plan_credits = !empty($ctx['plan_product_id']) ? e360_product_credits_for_display((int)$ctx['plan_product_id']) : 0;
+$format_label = e360_booking_format_label(e360_resolve_booking_format($ctx));
 $item->add_meta_data('e360_course_id', $course_id, true);
 $item->add_meta_data('Course', $course_title . ($course_id ? ' (ID ' . $course_id . ')' : ''));
 $item->add_meta_data('Teacher', $teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ?? '')));
 $item->add_meta_data('Date/time', ($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5));
 if ($plan_title) $item->add_meta_data('Package', $plan_title);
+if ($plan_credits > 0) $item->add_meta_data('Credits (lessons)', $plan_credits);
+$item->add_meta_data('Format', $format_label ?: 'Not set');
 $item->add_meta_data('Type', ($ctx['repeat'] ?? '') === 'once' ? 'One-time' : 'Weekly');
 }
 }
@@ -35,6 +80,8 @@ $course_title = !empty($ctx['course_id']) ? get_the_title((int)$ctx['course_id']
 $teacher = !empty($ctx['teacher_id']) ? get_user_by('id', (int)$ctx['teacher_id']) : null;
 $plan_title = !empty($ctx['plan_product_id']) && function_exists('wc_get_product') ?
 (wc_get_product($ctx['plan_product_id'])->get_name() ?? '') : '';
+$plan_credits = !empty($ctx['plan_product_id']) ? e360_product_credits_for_display((int)$ctx['plan_product_id']) : 0;
+$format_label = e360_booking_format_label(e360_resolve_booking_format($ctx));
 echo '<div id="e360-checkout-summary" style="padding:12px;border:1px solid #ddd;border-radius:10px;margin:12px 0;">';
     echo '<div style="font-weight:600;margin-bottom:6px;">Your lesson request</div>';
     echo '<div><strong>Course:</strong> ' . esc_html($course_title ?: ('#'.($ctx['course_id'] ?? ''))) . '</div>';
@@ -43,6 +90,8 @@ echo '<div id="e360-checkout-summary" style="padding:12px;border:1px solid #ddd;
     echo '<div><strong>Date/time:</strong> ' . esc_html(($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5)) .
         '</div>';
     if ($plan_title) echo '<div><strong>Package:</strong> ' . esc_html($plan_title) . '</div>';
+    if ($plan_credits > 0) echo '<div><strong>Credits (lessons):</strong> ' . esc_html((string)$plan_credits) . '</div>';
+    if ($format_label) echo '<div><strong>Format:</strong> ' . esc_html($format_label) . '</div>';
     echo '<div><strong>Type:</strong> ' . esc_html(($ctx['repeat'] ?? '') === 'once' ? 'One-time' : 'Weekly') . '</div>
     ';
     // Add hidden input with booking context JSON
@@ -66,6 +115,33 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
     }
 });
+
+// Show booking summary on Thank You / Order details page
+add_action('woocommerce_order_details_after_order_table', function($order) {
+if (!is_a($order, 'WC_Order')) return;
+
+$ctx = $order->get_meta('_e360_booking_context');
+if (!is_array($ctx) || empty($ctx)) return;
+
+$course_title = !empty($ctx['course_id']) ? get_the_title((int)$ctx['course_id']) : '';
+$teacher = !empty($ctx['teacher_id']) ? get_user_by('id', (int)$ctx['teacher_id']) : null;
+$plan_title = !empty($ctx['plan_product_id']) && function_exists('wc_get_product') ?
+(wc_get_product((int)$ctx['plan_product_id'])->get_name() ?? '') : '';
+$plan_credits = !empty($ctx['plan_product_id']) ? e360_product_credits_for_display((int)$ctx['plan_product_id']) : 0;
+$format_label = e360_booking_format_label(e360_resolve_booking_format($ctx));
+
+echo '<section id="e360-order-summary" style="margin-top:14px;padding:12px;border:1px solid #ddd;border-radius:10px;">';
+echo '<h2 style="margin:0 0 8px;font-size:18px;">Lesson request</h2>';
+echo '<p><strong>Course:</strong> ' . esc_html($course_title ?: ('#'.($ctx['course_id'] ?? ''))) . '</p>';
+echo '<p><strong>Teacher:</strong> ' . esc_html($teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ?? ''))) . '</p>';
+echo '<p><strong>Date/time:</strong> ' . esc_html(($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5)) . '</p>';
+if ($plan_title) echo '<p><strong>Package:</strong> ' . esc_html($plan_title) . '</p>';
+if ($plan_credits > 0) echo '<p><strong>Credits (lessons):</strong> ' . esc_html((string)$plan_credits) . '</p>';
+if ($format_label) echo '<p><strong>Format:</strong> ' . esc_html($format_label) . '</p>';
+echo '<p><strong>Type:</strong> ' . esc_html(($ctx['repeat'] ?? '') === 'once' ? 'One-time' : 'Weekly') . '</p>';
+echo '</section>';
+}, 20);
+
 // Restore booking context for cart item on checkout page load
 add_action('woocommerce_before_checkout_form', function() {
     if (!is_user_logged_in()) return;
@@ -106,6 +182,7 @@ $plan_product_id = isset($_POST['plan_product_id']) ? (int) $_POST['plan_product
 $_POST['plan'] : 0);
 $duration = isset($_POST['duration']) ? (int) $_POST['duration'] : 60;
 $repeat = isset($_POST['repeat']) ? sanitize_text_field($_POST['repeat']) : 'weekly';
+$booking_format = isset($_POST['booking_format']) ? sanitize_key(wp_unslash($_POST['booking_format'])) : '';
 if ($course_id && $teacher_id && $date && $time) {
 $ctx = [
 'language_term_id' => $language_term_id,
@@ -117,10 +194,12 @@ $ctx = [
 'plan_product_id' => $plan_product_id,
 'duration' => $duration,
 'repeat' => $repeat,
+'booking_format' => $booking_format,
 ];
 }
 }
 if (is_array($ctx) && $ctx) {
+$ctx['booking_format'] = e360_resolve_booking_format($ctx);
 $cart_item_data['e360_booking_context'] = $ctx;
 }
 return $cart_item_data;
@@ -149,6 +228,13 @@ $plan_title = function_exists('wc_get_product') ? (wc_get_product($ctx['plan_pro
 $item_data[] = [
 'name' => 'Package',
 'value' => esc_html($plan_title)
+];
+}
+$format_label = e360_booking_format_label(e360_resolve_booking_format($ctx));
+if ($format_label) {
+$item_data[] = [
+'name' => 'Format',
+'value' => esc_html($format_label)
 ];
 }
 $item_data[] = [
@@ -581,7 +667,31 @@ add_shortcode('e360_booking_wizard', function($atts){
         <div id="e360-teacher-list" style="margin:10px 0;"></div>
     </div>
 
+    <div id="e360-step-offer" style="display:none;">
+        <p>
+            <label>Choose format</label><br>
+        <div id="e360-purchase-options"
+            style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
+            <button type="button" class="e360-purchase-card tutor-btn tutor-btn-outline-primary"
+                data-plan-kind="trial">Trial lesson</button>
+            <button type="button" class="e360-purchase-card tutor-btn tutor-btn-outline-primary"
+                data-plan-kind="package">Buy a package</button>
+        </div>
+        </p>
+
+        <p id="e360-plan-wrap" style="display:none;">
+            <label>Choose package</label><br>
+            <select id="e360-plan">
+                <option value="">Select…</option>
+            </select>
+        </p>
+
+        <div id="e360-offer-msg" style="margin-top:10px;opacity:.85;"></div>
+        <div id="e360-offer-schedule" style="margin-top:12px;font-size:13px;display:none;"></div>
+    </div>
+
     <div id="e360-step-time" style="display:none;">
+        <p style="margin:0 0 8px;font-weight:600;">Choose a convenient time</p>
         <p>
             <label>Select Date</label><br>
             <input type="date" id="e360-date" min="<?php echo esc_attr(date('Y-m-d')); ?>">
@@ -592,14 +702,7 @@ add_shortcode('e360_booking_wizard', function($atts){
                 <option value="">Select date first…</option>
             </select>
         </p>
-        <p>
-            <label>Choose package</label><br>
-            <select id="e360-plan">
-                <option value="">Select…</option>
-            </select>
-        </p>
-
-        <p>
+        <p id="e360-repeat-wrap">
             <label>Lesson type</label><br>
             <select id="e360-repeat">
                 <option value="weekly" selected>Weekly</option>
@@ -625,6 +728,7 @@ jQuery(function($) {
     const $wiz = $('#e360-wizard');
 
     let coursesIndex = {}; // course_key => {course_title, variants:[]}
+    let plansIndex = []; // products from e360_get_plans
 
 
     let selected = {
@@ -639,6 +743,7 @@ jQuery(function($) {
         date: null,
         time: null,
         plan_product_id: null,
+        plan_kind: null,
         course_key: null,
         repeat: 'weekly',
     };
@@ -649,12 +754,20 @@ jQuery(function($) {
         $('#e360-level').html('<div style="opacity:.7">Select language first…</div>');
         $('#e360-course').html('<div style="opacity:.7">Select level first…</div>');
         $('#e360-teacher-list').empty();
+        $('#e360-step-offer').hide();
+        $('#e360-offer-msg').text('');
+        $('#e360-offer-schedule').hide().html('');
+        $('#e360-plan-wrap').hide();
+        $('#e360-plan').html('<option value="">Select…</option>');
         $('#e360-time').html('<option value="">Select date first…</option>');
         $('#e360-date').val('');
-        $('#e360-step-level, #e360-step-course, #e360-step-time').hide();
+        $('#e360-step-level, #e360-step-course, #e360-step-offer, #e360-step-time').hide();
         selected.level_term_id = selected.course_id = selected.teacher_id = null;
         selected.teacher_name = selected.course_title = null;
         selected.date = selected.time = null;
+        selected.plan_product_id = null;
+        selected.plan_kind = null;
+        selected.repeat = 'weekly';
     }
 
     function resetAfterLevel() {
@@ -662,13 +775,154 @@ jQuery(function($) {
         $('.e360-level-card').css('border-color', '#ddd');
         $('#e360-course').html('<div style="opacity:.7">Loading…</div>');
         $('#e360-teacher-list').empty();
+        $('#e360-step-offer').hide();
+        $('#e360-offer-msg').text('');
+        $('#e360-offer-schedule').hide().html('');
+        $('#e360-plan-wrap').hide();
+        $('#e360-plan').html('<option value="">Select…</option>');
         $('#e360-time').html('<option value="">Select date first…</option>');
         $('#e360-date').val('');
         $('#e360-step-course').show();
+        $('#e360-step-offer').hide();
         $('#e360-step-time').hide();
         selected.course_id = selected.teacher_id = null;
         selected.teacher_name = selected.course_title = null;
         selected.date = selected.time = null;
+        selected.plan_product_id = null;
+        selected.plan_kind = null;
+        selected.repeat = 'weekly';
+    }
+
+    function canShowTimeStep() {
+        return !!(selected.teacher_id && selected.plan_product_id);
+    }
+
+    function updateTimeStepVisibility() {
+        if (canShowTimeStep()) {
+            $('#e360-step-time').show();
+            return;
+        }
+        $('#e360-step-time').hide();
+    }
+
+    function renderPlansByKind(planKind) {
+        const $plan = $('#e360-plan');
+        const trialItems = plansIndex.filter(function(it) {
+            return (it.plan_kind || '') === 'trial';
+        });
+        const otherItems = plansIndex.filter(function(it) {
+            return (it.plan_kind || '') !== 'trial';
+        });
+
+        if (planKind === 'package') {
+            $('#e360-plan-wrap').show();
+            $plan.html('<option value="">Select…</option>');
+            otherItems.forEach(function(it) {
+                $plan.append($('<option>', {
+                    value: it.product_id,
+                    text: it.title + (it.price_text ? ' — ' + it.price_text : '')
+                }));
+            });
+            selected.plan_product_id = null;
+            if (!otherItems.length) {
+                $('#e360-offer-msg').text('No package products configured.');
+            } else {
+                $('#e360-offer-msg').text('');
+            }
+            return;
+        }
+
+        // trial: только "1 lesson subscription"
+        $('#e360-plan-wrap').show();
+        $plan.html('<option value="">Select…</option>');
+
+        const trialOne = trialItems.find(function(it) {
+            return /1\s*lesson\s*subscription/i.test((it.title || '').toString());
+        }) || trialItems[0] || null;
+
+        if (!trialOne) {
+            selected.plan_product_id = null;
+            $('#e360-offer-msg').text('Trial lesson product was not found.');
+            return;
+        }
+
+        $plan.append($('<option>', {
+            value: trialOne.product_id,
+            text: trialOne.title + (trialOne.price_text ? ' — ' + trialOne.price_text : '')
+        }));
+        $plan.val(String(trialOne.product_id));
+        selected.plan_product_id = parseInt(trialOne.product_id, 10) || null;
+        $('#e360-offer-msg').text(trialOne.title ? ('Selected: ' + trialOne.title) : '');
+    }
+
+    function loadTeacherSchedulePreview(teacherId) {
+        const $box = $('#e360-offer-schedule');
+        if (!teacherId) {
+            $box.hide().html('');
+            return;
+        }
+
+        $box.show().html('<em>Loading schedule…</em>');
+
+        $.post(ajaxurl, {
+            action: 'e360_get_schedule_preview_bulk',
+            nonce,
+            duration: selected.duration,
+            teacher_ids: JSON.stringify([teacherId])
+        }).done(function(resp) {
+            if (!resp || !resp.success) {
+                $box.html('<em>Schedule unavailable</em>');
+                return;
+            }
+
+            const map = resp.data.items || {};
+            const data = map[teacherId];
+            if (!data || !data.days) {
+                $box.html('<em>No schedule</em>');
+                return;
+            }
+
+            let s = '<div style="font-weight:600;margin-bottom:4px;">Next 7 days</div>';
+            s += '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;">';
+
+            data.days.forEach(function(d) {
+                const dateObj = new Date(d.date);
+                const weekday = dateObj.toLocaleDateString('en-US', {
+                    weekday: 'short'
+                });
+                const day = d.date.slice(5);
+                const times = (d.times && d.times.length) ? d.times.join(', ') : '—';
+                s += `<div style="border:1px solid #eee;border-radius:10px;padding:6px;">
+                        <div style="font-size:12px;opacity:.8;">${weekday}, ${day}</div>
+                        <div style="font-size:12px;">${times}</div>
+                      </div>`;
+            });
+
+            s += '</div>';
+            $box.html(s);
+        });
+    }
+
+    function applyPlanKind(planKind) {
+        selected.plan_kind = planKind || null;
+        selected.plan_product_id = null;
+        selected.date = null;
+        selected.time = null;
+        $('#e360-date').val('');
+        $('#e360-time').html('<option value="">Select date first…</option>');
+
+        if (planKind === 'package') {
+            selected.repeat = 'weekly';
+            $('#e360-repeat').val('weekly');
+            $('#e360-repeat-wrap').show();
+        } else {
+            selected.repeat = 'once';
+            $('#e360-repeat').val('once');
+            $('#e360-repeat-wrap').hide();
+        }
+
+        renderPlansByKind(planKind);
+        updateTimeStepVisibility();
     }
 
     function loadLevels(languageTermId) {
@@ -745,12 +999,15 @@ jQuery(function($) {
 
             // Спрячем учителей/время пока курс не выбран
             $('#e360-teacher-list').empty();
+            $('#e360-step-offer').hide();
             $('#e360-step-time').hide();
             selected.course_key = null;
             selected.course_id = null;
             selected.teacher_id = null;
             selected.teacher_name = null;
             selected.course_title = null;
+            selected.plan_product_id = null;
+            selected.plan_kind = null;
         });
     }
 
@@ -860,13 +1117,10 @@ jQuery(function($) {
 
         // Рисуем карточки учителей
         const teachers = group.variants;
-        const teacherIds = [];
 
         let html =
             '<div class="e360-teachers" style="display:grid;grid-template-columns:1fr;gap:10px;">';
         teachers.forEach(function(v) {
-            teacherIds.push(parseInt(v.teacher_id, 10));
-
             const avatar = v.teacher_avatar ?
                 `<img src="${v.teacher_avatar}" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;">` :
                 '';
@@ -906,10 +1160,6 @@ jQuery(function($) {
                     ${bioBtn}
                     ${bioFull}
 
-                    <div class="e360-schedule" style="margin-top:10px;font-size:13px;">
-                        <em>Loading schedule…</em>
-                    </div>
-
                     <div style="margin-top:10px;">
                         ${chooseBtn}
                     </div>
@@ -936,8 +1186,8 @@ jQuery(function($) {
                 e.stopPropagation();
                 $(this).closest('.e360-teacher-card').trigger('click');
 
-                // мягко докрутим к выбору времени
-                const $step = $('#e360-step-time');
+                // мягко докрутим к выбору формата
+                const $step = $('#e360-step-offer');
                 if ($step.length) {
                     $('html, body').animate({
                         scrollTop: $step.offset().top - 80
@@ -957,84 +1207,23 @@ jQuery(function($) {
             selected.teacher_id = teacherId || null;
             selected.course_id = courseId || null;
             selected.teacher_name = teacherName || null;
+            selected.plan_kind = null;
+            selected.plan_product_id = null;
+            selected.date = null;
+            selected.time = null;
 
-            $('#e360-step-time').show();
-        });
+            $('#e360-date').val('');
+            $('#e360-time').html('<option value="">Select date first…</option>');
+            $('#e360-offer-msg').text('');
+            $('#e360-offer-schedule').show().html('<em>Loading schedule…</em>');
+            $('.e360-purchase-card').removeClass('tutor-btn-primary').addClass(
+                'tutor-btn-outline-primary');
+            $('#e360-step-offer').show();
+            $('#e360-plan-wrap').hide();
+            updateTimeStepVisibility();
 
-
-        // одним запросом подтягиваем расписание на 7 дней
-        $.post(ajaxurl, {
-            action: 'e360_get_schedule_preview_bulk',
-            nonce,
-            duration: selected.duration,
-            teacher_ids: JSON.stringify([...new Set(teacherIds)])
-        }).done(function(resp) {
-            if (!resp || !resp.success) {
-                $('.e360-schedule').html('<em>Schedule unavailable</em>');
-                return;
-            }
-
-            const map = resp.data.items || {};
-            $('.e360-teacher-card').each(function() {
-                const tid = parseInt($(this).data('teacher-id'), 10);
-                const data = map[tid];
-                if (!data || !data.days) {
-                    $(this).find('.e360-schedule').html('<em>No schedule</em>');
-                    return;
-                }
-
-                let s =
-                    '<div style="font-weight:600;margin-bottom:4px;">Next 7 days</div>';
-                s +=
-                    '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;">';
-
-                data.days.forEach(function(d) {
-                    const dateObj = new Date(d.date);
-                    const weekday = dateObj.toLocaleDateString('en-US', {
-                        weekday: 'short'
-                    });
-                    const day = d.date.slice(5); // MM-DD
-                    const times = (d.times && d.times.length) ? d.times.join(
-                        ', ') : '—';
-                    s += `<div style="border:1px solid #eee;border-radius:10px;padding:6px;">
-                        <div style="font-size:12px;opacity:.8;">${weekday}, ${day}</div>
-                        <div style="font-size:12px;">${times}</div>
-                      </div>`;
-                });
-
-                s += '</div>';
-                $(this).find('.e360-schedule').html(s);
-            });
-        });
-
-        // Пакеты можно грузить сразу (они универсальные)
-        loadPlans();
-
-        $('#e360-repeat').on('change', function() {
-            selected.repeat = $(this).val() || 'weekly';
-        });
-
-
-        $(document).on('click', '.e360-teacher-card', function() {
-            // визуально выделяем
-            $('.e360-teacher-card').css('border-color', '#ddd');
-            $(this).css('border-color', '#3e64de');
-
-            const teacherId = parseInt($(this).data('teacher-id'), 10) || 0;
-            const courseId = parseInt($(this).data('course-id'), 10) || 0;
-            const teacherName = $(this).data('teacher-name') || null;
-
-            selected.teacher_id = teacherId || null;
-            selected.course_id = courseId || null;
-            selected.teacher_name = teacherName || null;
-
-            // course_title на registration покажем как реальный title выбранного course post
-            selected.course_title = courseId ? null :
-                null; // можно не хранить, ты и так берёшь title по ID на registration
-
-            if (!teacherId || !courseId) return;
-
-            $('#e360-step-time').show();
+            loadPlans();
+            loadTeacherSchedulePreview(teacherId);
         });
 
     });
@@ -1044,7 +1233,7 @@ jQuery(function($) {
     $('#e360-date').on('change', function() {
         const date = $(this).val();
         selected.date = date || null;
-        if (!date || !selected.teacher_id) return;
+        if (!date || !selected.teacher_id || !canShowTimeStep()) return;
         loadSlots(selected.teacher_id, date);
     });
 
@@ -1054,6 +1243,26 @@ jQuery(function($) {
 
     $('#e360-plan').on('change', function() {
         selected.plan_product_id = parseInt($(this).val(), 10) || null;
+        updateTimeStepVisibility();
+
+        if (selected.plan_product_id && selected.date && selected.teacher_id) {
+            loadSlots(selected.teacher_id, selected.date);
+        }
+    });
+
+    $(document).on('click', '.e360-purchase-card', function() {
+        if (!selected.teacher_id) return;
+        const planKind = ($(this).data('plan-kind') || '').toString();
+        if (!planKind) return;
+
+        $('.e360-purchase-card').removeClass('tutor-btn-primary').addClass('tutor-btn-outline-primary');
+        $(this).removeClass('tutor-btn-outline-primary').addClass('tutor-btn-primary');
+
+        applyPlanKind(planKind);
+    });
+
+    $('#e360-repeat').on('change', function() {
+        selected.repeat = $(this).val() || 'weekly';
     });
 
 
@@ -1065,7 +1274,7 @@ jQuery(function($) {
             return;
         }
         if (!selected.plan_product_id) {
-            $('#e360-msg').text('Select a package first.');
+            $('#e360-msg').text('Select a lesson option first.');
             return;
         }
 
@@ -1081,6 +1290,9 @@ jQuery(function($) {
         url.searchParams.set('plan_product_id', selected.plan_product_id);
         url.searchParams.set('duration', selected.duration);
         url.searchParams.set('repeat', selected.repeat);
+        if (selected.plan_kind) {
+            url.searchParams.set('booking_format', selected.plan_kind);
+        }
 
 
 
@@ -1089,31 +1301,28 @@ jQuery(function($) {
 
 
     function loadPlans() {
-        const $plan = $('#e360-plan');
-        $plan.html('<option value="">Loading…</option>');
+        if (plansIndex.length) return;
+        $('#e360-plan').html('<option value="">Loading…</option>');
 
         $.post(ajaxurl, {
             action: 'e360_get_plans',
             nonce
         }).done(function(resp) {
             if (!resp || !resp.success) {
-                $plan.html('<option value="">Error</option>');
+                $('#e360-offer-msg').text('Could not load payment options.');
+                $('#e360-plan').html('<option value="">Error</option>');
                 return;
             }
 
             const items = resp.data.items || [];
             if (!items.length) {
-                $plan.html('<option value="">No packages found</option>');
+                $('#e360-offer-msg').text('No payment options are available.');
+                $('#e360-plan').html('<option value="">No packages found</option>');
                 return;
             }
 
-            $plan.html('<option value="">Select…</option>');
-            items.forEach(function(it) {
-                $plan.append($('<option>', {
-                    value: it.product_id,
-                    text: it.title + (it.price_text ? ' — ' + it.price_text : '')
-                }));
-            });
+            plansIndex = items;
+            if (selected.plan_kind) applyPlanKind(selected.plan_kind);
         });
     }
 
@@ -1131,6 +1340,8 @@ add_shortcode('e360_registration_booking_context', function () {
     $teacher_id = isset($_GET['teacher_id']) ? (int) $_GET['teacher_id'] : 0;
     $date       = isset($_GET['date']) ? sanitize_text_field($_GET['date']) : '';
     $time       = isset($_GET['time']) ? sanitize_text_field($_GET['time']) : '';
+    $booking_format = isset($_GET['booking_format']) ? sanitize_key($_GET['booking_format']) : '';
+    $format_label = e360_booking_format_label($booking_format);
 
     if (!$course_id || !$teacher_id || !$date || !$time) {
         return ''; // если пришли без параметров — ничего не показываем
@@ -1157,7 +1368,10 @@ add_shortcode('e360_registration_booking_context', function () {
     <?php endif; ?>
     Teacher: <?php echo esc_html($teacher_name); ?><br>
     Course: <?php echo esc_html($course_title); ?><br>
-    Date/Time: <?php echo esc_html($date . ' ' . substr($time, 0, 5)); ?>
+    Date/Time: <?php echo esc_html($date . ' ' . substr($time, 0, 5)); ?><br>
+    <?php if ($format_label) : ?>
+    Format: <?php echo esc_html($format_label); ?>
+    <?php endif; ?>
 </div>
 
 <div id="e360-hidden-context" style="display:none;">
@@ -1166,6 +1380,7 @@ add_shortcode('e360_registration_booking_context', function () {
     <input type="hidden" name="e360_teacher_id" value="<?php echo esc_attr($teacher_id); ?>">
     <input type="hidden" name="e360_booking_date" value="<?php echo esc_attr($date); ?>">
     <input type="hidden" name="e360_booking_time" value="<?php echo esc_attr($time); ?>">
+    <input type="hidden" name="booking_format" value="<?php echo esc_attr($booking_format); ?>">
 </div>
 
 <script>
@@ -1200,6 +1415,10 @@ add_action('user_register', function($user_id){
         $raw = wp_unslash($_POST['e360_booking_ctx']);
         $ctx = json_decode($raw, true);
     }
+    if ((!is_array($ctx) || !$ctx) && !empty($_POST['e360_booking_ctx_checkout'])) {
+        $raw = wp_unslash($_POST['e360_booking_ctx_checkout']);
+        $ctx = json_decode($raw, true);
+    }
 
     // fallback: individual hidden inputs (older shortcode / simple hidden fields)
     if (!is_array($ctx) || !$ctx) {
@@ -1211,6 +1430,7 @@ add_action('user_register', function($user_id){
         $language_term_id = isset($_POST['e360_term_id']) ? (int) $_POST['e360_term_id'] : (isset($_POST['language_term_id']) ? (int) $_POST['language_term_id'] : 0);
         $level_term_id = isset($_POST['level_term_id']) ? (int) $_POST['level_term_id'] : (isset($_POST['e360_level_id']) ? (int) $_POST['e360_level_id'] : 0);
         $plan_product_id = isset($_POST['plan_product_id']) ? (int) $_POST['plan_product_id'] : (isset($_POST['plan']) ? (int) $_POST['plan'] : 0);
+        $booking_format = isset($_POST['booking_format']) ? sanitize_key(wp_unslash($_POST['booking_format'])) : '';
 
         if ($course_id && $teacher_id && $date && $time) {
             $ctx = [
@@ -1221,6 +1441,7 @@ add_action('user_register', function($user_id){
                 'date'             => $date,
                 'time'             => $time,
                 'plan_product_id'  => $plan_product_id,
+                'booking_format'   => $booking_format,
             ];
         }
     }
@@ -1237,6 +1458,7 @@ add_action('user_register', function($user_id){
         'date'             => sanitize_text_field($ctx['date'] ?? ''),
         'time'             => sanitize_text_field($ctx['time'] ?? ''),
         'plan_product_id'  => $plan_id,
+        'booking_format'   => e360_resolve_booking_format($ctx),
         'created_at'       => current_time('mysql'),
     ];
 
@@ -1341,6 +1563,7 @@ add_action('wp_footer', function () {
     $level_term_id    = isset($_GET['level_term_id']) ? (int) $_GET['level_term_id'] : 0;
 
     $plan_product_id = isset($_GET['plan_product_id']) ? (int) $_GET['plan_product_id'] : 0;
+    $booking_format = isset($_GET['booking_format']) ? sanitize_key($_GET['booking_format']) : '';
 
 
     // Если параметров нет — ничего не показываем.
@@ -1351,6 +1574,11 @@ add_action('wp_footer', function () {
     $teacher_name = $teacher ? $teacher->display_name : ('Teacher #'.$teacher_id);
     $duration = isset($_GET['duration']) ? (int) $_GET['duration'] : 60;
     $repeat   = isset($_GET['repeat']) ? sanitize_text_field($_GET['repeat']) : 'weekly';
+    $format_key = e360_resolve_booking_format([
+        'booking_format' => $booking_format,
+        'plan_product_id' => $plan_product_id,
+    ]);
+    $format_label = e360_booking_format_label($format_key);
 
 
     $ctx = [
@@ -1363,6 +1591,7 @@ add_action('wp_footer', function () {
         'plan_product_id' => $plan_product_id,
         'duration' => $duration,
         'repeat'   => $repeat,
+        'booking_format' => $format_key,
 
 
     ];
@@ -1387,8 +1616,12 @@ if ($plan_product_id && function_exists('wc_get_product')) {
     <div><strong>Date/time:</strong> <?php echo esc_html($date . ' ' . substr($time,0,5)); ?></div>
     <?php if ($plan_title): ?>
     <div><strong>Package:</strong> <?php echo esc_html($plan_title . ($plan_price ? ' — ' . $plan_price : '')); ?></div>
+    <?php endif; ?>
+    <?php if ($format_label): ?>
+    <div><strong>Format:</strong> <?php echo esc_html($format_label); ?></div>
+    <?php endif; ?>
+    <?php if ($plan_title): ?>
     <div><strong>Type:</strong> <?php echo esc_html($repeat === 'once' ? 'One-time' : 'Weekly'); ?></div>
-
     <?php endif; ?>
 
 </div>
@@ -1481,6 +1714,7 @@ function e360_get_plans() {
             'price_html' => $price_html,
             'price_text' => $price_text,
             'type'       => $product->get_type(),
+            'plan_kind'  => sanitize_key((string) get_post_meta($pid, 'e360_product_type', true)),
         ];
     }
 
@@ -1738,6 +1972,10 @@ add_action('woocommerce_checkout_create_order', function($order){
         $raw = wp_unslash($_POST['e360_booking_ctx']);
         $ctx = json_decode($raw, true);
     }
+    if ((!is_array($ctx) || !$ctx) && !empty($_POST['e360_booking_ctx_checkout'])) {
+        $raw = wp_unslash($_POST['e360_booking_ctx_checkout']);
+        $ctx = json_decode($raw, true);
+    }
     if (!is_array($ctx) || !$ctx) {
         $course_id = isset($_POST['e360_course_id']) ? (int) $_POST['e360_course_id'] : (isset($_POST['course_id']) ? (int) $_POST['course_id'] : 0);
         $teacher_id = isset($_POST['e360_teacher_id']) ? (int) $_POST['e360_teacher_id'] : (isset($_POST['teacher_id']) ? (int) $_POST['teacher_id'] : 0);
@@ -1748,6 +1986,7 @@ add_action('woocommerce_checkout_create_order', function($order){
         $plan_product_id = isset($_POST['plan_product_id']) ? (int) $_POST['plan_product_id'] : (isset($_POST['plan']) ? (int) $_POST['plan'] : 0);
         $duration = isset($_POST['duration']) ? (int) $_POST['duration'] : 60;
         $repeat = isset($_POST['repeat']) ? sanitize_text_field($_POST['repeat']) : 'weekly';
+        $booking_format = isset($_POST['booking_format']) ? sanitize_key(wp_unslash($_POST['booking_format'])) : '';
         if ($course_id && $teacher_id && $date && $time) {
             $ctx = [
                 'language_term_id' => $language_term_id,
@@ -1759,10 +1998,12 @@ add_action('woocommerce_checkout_create_order', function($order){
                 'plan_product_id'  => $plan_product_id,
                 'duration'         => $duration,
                 'repeat'           => $repeat,
+                'booking_format'   => $booking_format,
             ];
         }
     }
     if (is_array($ctx) && $ctx) {
+        $ctx['booking_format'] = e360_resolve_booking_format($ctx);
         $order->update_meta_data('_e360_booking_context', $ctx);
     }
 
@@ -1801,12 +2042,22 @@ add_action('woocommerce_admin_order_data_after_billing_address', function($order
     if ($wa)    echo '<p><strong>WhatsApp number:</strong> ' . esc_html($wa) . '</p>';
     
     $ctx = $order->get_meta('_e360_booking_context');
+    $order_credits_total = 0;
+    foreach ($order->get_items('line_item') as $item) {
+        $pid = (int) ($item->get_variation_id() ?: $item->get_product_id());
+        if ($pid <= 0) continue;
+        $qty = (int) $item->get_quantity();
+        if ($qty <= 0) $qty = 1;
+        $order_credits_total += (e360_product_credits_for_display($pid) * $qty);
+    }
+
     // Show booking context
     if (is_array($ctx) && !empty($ctx)) {
         echo '<div style="margin-top:10px;">';
         echo '<strong>Booking details:</strong><br>';
         $course_title = !empty($ctx['course_id']) ? get_the_title((int)$ctx['course_id']) : '';
         $teacher = !empty($ctx['teacher_id']) ? get_user_by('id', (int)$ctx['teacher_id']) : null;
+        $plan_credits = !empty($ctx['plan_product_id']) ? e360_product_credits_for_display((int)$ctx['plan_product_id']) : 0;
         echo '<p><strong>Course:</strong> ' . esc_html($course_title ?: ('#'.($ctx['course_id'] ?? ''))) . '</p>';
         echo '<p><strong>Teacher:</strong> ' . esc_html($teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ?? ''))) . '</p>';
         echo '<p><strong>Date/time:</strong> ' . esc_html(($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5)) . '</p>';
@@ -1814,8 +2065,19 @@ add_action('woocommerce_admin_order_data_after_billing_address', function($order
             $plan_title = function_exists('wc_get_product') ? (wc_get_product($ctx['plan_product_id'])->get_name() ?? '') : '';
             echo '<p><strong>Package:</strong> ' . esc_html($plan_title) . '</p>';
         }
+        if ($plan_credits > 0) {
+            echo '<p><strong>Credits (lessons):</strong> ' . esc_html((string)$plan_credits) . '</p>';
+        } elseif ($order_credits_total > 0) {
+            echo '<p><strong>Credits (lessons):</strong> ' . esc_html((string)$order_credits_total) . '</p>';
+        }
+        $format_label = e360_booking_format_label(e360_resolve_booking_format($ctx));
+        if ($format_label) {
+            echo '<p><strong>Format:</strong> ' . esc_html($format_label) . '</p>';
+        }
         echo '<p><strong>Type:</strong> ' . esc_html(($ctx['repeat'] ?? '') === 'once' ? 'One-time' : 'Weekly') . '</p>';
         echo '</div>';
+    } elseif ($order_credits_total > 0) {
+        echo '<p><strong>Credits (lessons):</strong> ' . esc_html((string)$order_credits_total) . '</p>';
     }
     echo '</div>';
 
