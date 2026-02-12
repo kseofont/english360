@@ -616,9 +616,9 @@ add_shortcode('e360_booking_wizard', function($atts){
     data-duration="<?php echo esc_attr($duration); ?>"
     data-registration-url="<?php echo esc_attr($registration_url); ?>">
     <p>
-        <label>Language</label><br>
+        <label>What language would you like to learn?</label><br>
     <div id="e360-language" class="e360-language-cards"
-        style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">
+        style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">
         <?php foreach ($languages as $t): ?>
         <?php
                 $term_id = (int) $t->term_id;
@@ -627,18 +627,18 @@ add_shortcode('e360_booking_wizard', function($atts){
                 if ($thumb_id) $img = wp_get_attachment_image_url($thumb_id, 'medium');
             ?>
         <div class="e360-language-card" data-term-id="<?php echo $term_id; ?>"
-            style="border:1px solid #ddd;border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;gap:8px;">
+            style="border:1px solid #ddd;border-radius:10px;padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;min-height:92px;">
             <?php if ($img): ?>
             <img src="<?php echo esc_url($img); ?>" alt="<?php echo esc_attr($t->name); ?>"
-                style="width:48px;height:48px;border-radius:6px;object-fit:cover;">
+                style="width:64px;height:64px;border-radius:8px;object-fit:cover;">
             <?php else: ?>
             <div
-                style="width:48px;height:48px;border-radius:6px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-weight:600;color:#555;">
+                style="width:64px;height:64px;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-weight:600;color:#555;font-size:20px;">
                 <?php echo esc_html(mb_substr($t->name,0,1)); ?>
             </div>
             <?php endif; ?>
             <div style="flex:1;">
-                <div style="font-weight:600;"><?php echo esc_html($t->name); ?></div>
+                <div style="font-weight:600;font-size:18px;line-height:1.2;"><?php echo esc_html($t->name); ?></div>
             </div>
         </div>
         <?php endforeach; ?>

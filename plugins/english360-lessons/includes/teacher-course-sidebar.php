@@ -8,20 +8,14 @@ add_action('wp_footer', function () {
 
     if (!e360_is_course_instructor($teacher_id, $course_id)) return;
 
-    $enrol_ids = get_posts([
-        'post_type'      => 'tutor_enrolled',
-        'post_status'    =>  'any',
-        'post_parent'    => $course_id,
-        'fields'         => 'ids',
-        'posts_per_page' => 500,
-    ]);
-
-    $student_ids = [];
-    foreach ($enrol_ids as $eid) {
-        $p = get_post((int)$eid);
-        if ($p && (int)$p->post_author) $student_ids[] = (int)$p->post_author;
+    $student_ids = function_exists('e360_get_course_enrolled_student_ids')
+        ? e360_get_course_enrolled_student_ids((int)$course_id, 500)
+        : [];
+    if ($student_ids && function_exists('e360_is_student_enrolled_in_course')) {
+        $student_ids = array_values(array_filter($student_ids, function($sid) use ($course_id) {
+            return e360_is_student_enrolled_in_course((int)$sid, (int)$course_id);
+        }));
     }
-    $student_ids = array_values(array_unique($student_ids));
     if (!$student_ids) return;
 
     ob_start();

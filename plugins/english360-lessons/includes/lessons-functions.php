@@ -387,7 +387,252 @@ function e360_is_course_instructor(int $user_id, int $course_id): bool {
  */
 if (!function_exists('e360_get_course_enrolled_student_ids')) {
 
+function e360_active_enrollment_statuses(): array {
+    $statuses = ['approved', 'completed', 'publish'];
+    $statuses = apply_filters('e360_active_enrollment_statuses', $statuses);
+    if (!is_array($statuses)) $statuses = ['approved', 'completed', 'publish'];
+    return array_values(array_unique(array_map('sanitize_key', $statuses)));
+}
+
+function e360_normalize_enrollment_status($raw): string {
+    if ($raw === null || $raw === '') return '';
+    $s = sanitize_key((string)$raw);
+    if ($s === '') return '';
+    // ignore pure numeric statuses: mapping varies by Tutor version/DB schema.
+    if (preg_match('/^\d+$/', $s)) return '';
+
+    if ($s === 'approve') return 'approved';
+    if ($s === 'complete') return 'completed';
+    if ($s === 'cancel') return 'cancelled';
+    if ($s === 'canceled') return 'cancelled';
+    if ($s === 'enrolled') return 'approved';
+    if ($s === 'active') return 'approved';
+    return $s;
+}
+
+function e360_get_active_student_ids_from_tutor_enrollments_table(int $course_id, int $limit = 500): array {
+    global $wpdb;
+    if ($course_id <= 0 || !isset($wpdb)) return [];
+
+    $tables = [
+        $wpdb->prefix . 'tutor_enrollments',
+        $wpdb->prefix . 'tutor_enrolments',
+    ];
+
+    foreach ($tables as $table) {
+        $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+        if ($exists !== $table) continue;
+
+        $cols = $wpdb->get_col("SHOW COLUMNS FROM `{$table}`", 0);
+        if (!is_array($cols) || !$cols) continue;
+
+        $uid_col = '';
+        foreach (['user_id', 'student_id'] as $c) {
+            if (in_array($c, $cols, true)) { $uid_col = $c; break; }
+        }
+        $course_col = '';
+        foreach (['course_id', 'object_id'] as $c) {
+            if (in_array($c, $cols, true)) { $course_col = $c; break; }
+        }
+        $status_col = '';
+        foreach (['status', 'enrolment_status', 'enrollment_status'] as $c) {
+            if (in_array($c, $cols, true)) { $status_col = $c; break; }
+        }
+        $id_col = '';
+        foreach (['enrollment_id', 'enrolment_id', 'id'] as $c) {
+            if (in_array($c, $cols, true)) { $id_col = $c; break; }
+        }
+
+        if ($uid_col === '' || $course_col === '') continue;
+
+        if ($status_col !== '') {
+            $order_sql = $id_col !== '' ? "ORDER BY `{$id_col}` DESC" : "";
+            $rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT `{$uid_col}` AS uid, `{$status_col}` AS st FROM `{$table}` WHERE `{$course_col}` = %d {$order_sql}",
+                    $course_id
+                ),
+                ARRAY_A
+            );
+            if (!is_array($rows)) $rows = [];
+
+            $seen = [];
+            $out = [];
+            foreach ($rows as $r) {
+                $sid = isset($r['uid']) ? (int)$r['uid'] : 0;
+                if ($sid <= 0 || isset($seen[$sid])) continue;
+                $seen[$sid] = true;
+
+                $st = e360_normalize_enrollment_status($r['st'] ?? '');
+                if (in_array($st, ['cancel', 'cancelled', 'canceled', 'rejected', 'trash'], true)) continue;
+                if (!e360_is_enrolment_status_active($st)) continue;
+
+                $out[] = $sid;
+                if ($limit > 0 && count($out) >= $limit) break;
+            }
+            return array_values(array_unique(array_filter($out)));
+        }
+
+        // Table without explicit status: fallback to distinct users for course.
+        $ids = $wpdb->get_col(
+            $wpdb->prepare(
+                "SELECT DISTINCT `{$uid_col}` FROM `{$table}` WHERE `{$course_col}` = %d LIMIT %d",
+                $course_id,
+                max(1, (int)$limit)
+            )
+        );
+        $ids = array_values(array_unique(array_map('intval', (array)$ids)));
+        return array_values(array_filter($ids));
+    }
+
+    return [];
+}
+
+function e360_get_enrollment_status_value(int $enrol_id): string {
+    if ($enrol_id <= 0) return '';
+
+    $keys = [
+        'enrol_status',
+        'enrollment_status',
+        '_enrol_status',
+        '_enrollment_status',
+        'tutor_enrol_status',
+        'tutor_enrollment_status',
+        '_tutor_enrol_status',
+        '_tutor_enrollment_status',
+        'status',
+    ];
+
+    foreach ($keys as $k) {
+        $v = get_post_meta($enrol_id, $k, true);
+        if (!is_scalar($v)) continue;
+        $v = e360_normalize_enrollment_status($v);
+        if ($v !== '') return $v;
+    }
+
+    // Fallback: inspect all enrollment meta values and pick known status token.
+    $all = get_post_meta($enrol_id);
+    if (is_array($all) && !empty($all)) {
+        $known = [
+            'approved', 'complete', 'completed', 'publish',
+            'cancel', 'cancelled', 'canceled',
+            'pending', 'hold', 'on_hold', 'rejected', 'trash',
+        ];
+        foreach ($all as $mv) {
+            if (!is_array($mv)) $mv = [$mv];
+            foreach ($mv as $one) {
+                if (!is_scalar($one)) continue;
+                $s = e360_normalize_enrollment_status($one);
+                if ($s === '') continue;
+                if (in_array($s, $known, true)) return $s;
+            }
+        }
+    }
+
+    // Do not fallback to post_status here: Tutor often keeps post published even when enrollment is cancelled.
+    return '';
+}
+
+function e360_is_enrolment_status_active(string $status): bool {
+    $status = e360_normalize_enrollment_status($status);
+    if ($status === '') return false;
+    if (in_array($status, ['cancel', 'cancelled', 'canceled', 'rejected', 'trash'], true)) return false;
+    return in_array($status, e360_active_enrollment_statuses(), true);
+}
+
+function e360_extract_user_ids_from_mixed($raw): array {
+    $out = [];
+
+    $push = function($v) use (&$out) {
+        if ($v > 0) $out[] = (int)$v;
+    };
+
+    if (is_numeric($raw)) {
+        $push((int)$raw);
+    } elseif (is_object($raw)) {
+        if (isset($raw->ID)) $push((int)$raw->ID);
+        if (isset($raw->user_id)) $push((int)$raw->user_id);
+        if (isset($raw->id)) $push((int)$raw->id);
+        if (isset($raw->items)) $out = array_merge($out, e360_extract_user_ids_from_mixed($raw->items));
+        if (isset($raw->results)) $out = array_merge($out, e360_extract_user_ids_from_mixed($raw->results));
+        if (isset($raw->data)) $out = array_merge($out, e360_extract_user_ids_from_mixed($raw->data));
+    } elseif (is_array($raw)) {
+        if (isset($raw['ID'])) $push((int)$raw['ID']);
+        if (isset($raw['user_id'])) $push((int)$raw['user_id']);
+        if (isset($raw['id'])) $push((int)$raw['id']);
+        foreach ($raw as $v) {
+            if (is_array($v) || is_object($v) || is_numeric($v)) {
+                $out = array_merge($out, e360_extract_user_ids_from_mixed($v));
+            }
+        }
+    }
+
+    return array_values(array_unique(array_filter(array_map('intval', $out))));
+}
+
+function e360_get_active_enrolled_student_ids_for_course(int $course_id, int $limit = 500): array {
+    if ($course_id <= 0 || !function_exists('tutor_utils')) return [];
+    $u = tutor_utils();
+    if (!is_object($u)) return [];
+
+    $methods = [
+        'get_enrolled_user_ids_by_course',
+        'get_enrolled_students_by_course',
+        'get_enrolled_users_by_course',
+        'get_students_by_course',
+        'get_enrolled_users',
+    ];
+
+    foreach ($methods as $m) {
+        if (!method_exists($u, $m)) continue;
+        try {
+            $raw = $u->{$m}($course_id);
+            $ids = e360_extract_user_ids_from_mixed($raw);
+            if ($ids) {
+                if ($limit > 0 && count($ids) > $limit) $ids = array_slice($ids, 0, $limit);
+                return $ids;
+            }
+        } catch (\Throwable $e) {}
+    }
+
+    // Fallback for Tutor builds exposing only is_enrolled(course_id, student_id).
+    if (method_exists($u, 'is_enrolled')) {
+        $enrol_ids = get_posts([
+            'post_type'      => 'tutor_enrolled',
+            'post_status'    => 'any',
+            'post_parent'    => $course_id,
+            'fields'         => 'ids',
+            'posts_per_page' => max(500, $limit),
+        ]);
+
+        $candidates = [];
+        foreach ($enrol_ids as $eid) {
+            $p = get_post((int)$eid);
+            if ($p && (int)$p->post_author > 0) $candidates[] = (int)$p->post_author;
+        }
+        $candidates = array_values(array_unique(array_filter($candidates)));
+
+        $active = [];
+        foreach ($candidates as $sid) {
+            try {
+                $v = $u->is_enrolled($course_id, $sid);
+                if ($v) $active[] = (int)$sid;
+            } catch (\Throwable $e) {}
+        }
+        if ($active) {
+            if ($limit > 0 && count($active) > $limit) $active = array_slice($active, 0, $limit);
+            return array_values(array_unique($active));
+        }
+    }
+
+    return [];
+}
+
 function e360_get_course_enrolled_student_ids(int $course_id, int $limit = 500): array {
+    // Preferred: Tutor API active enrolled users.
+    $active_ids = e360_get_active_enrolled_student_ids_for_course($course_id, $limit);
+    if (!empty($active_ids)) return $active_ids;
+
     $enrol_ids = get_posts([
         'post_type'      => 'tutor_enrolled',
         'post_status'    => 'any',
@@ -414,6 +659,19 @@ function e360_get_course_enrolled_student_ids(int $course_id, int $limit = 500):
 if (!function_exists('e360_is_student_enrolled_in_course')) {
 
 function e360_is_student_enrolled_in_course(int $student_id, int $course_id): bool {
+    if (function_exists('tutor_utils')) {
+        $u = tutor_utils();
+        if (is_object($u) && method_exists($u, 'is_enrolled')) {
+            try {
+                $v = $u->is_enrolled($course_id, $student_id);
+                if ($v !== null) return (bool)$v;
+            } catch (\Throwable $e) {}
+        }
+    }
+
+    $active_ids = e360_get_active_enrolled_student_ids_for_course($course_id, 2000);
+    if (!empty($active_ids)) return in_array((int)$student_id, $active_ids, true);
+
     $ids = get_posts([
         'post_type'      => 'tutor_enrolled',
         'post_status'    => 'any',

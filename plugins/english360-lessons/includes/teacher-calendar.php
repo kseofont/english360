@@ -181,6 +181,117 @@ function e360_sanitize_availability(array $input): array {
     return $out;
 }
 
+function e360_availability_equals(array $a, array $b): bool {
+    $normalize = function(array $x): array {
+        $x = e360_sanitize_availability($x);
+        $days = ['mon','tue','wed','thu','fri','sat','sun'];
+        foreach ($days as $d) {
+            $rows = isset($x[$d]) && is_array($x[$d]) ? $x[$d] : [];
+            usort($rows, function($r1, $r2){
+                return strcmp((string)($r1['from'] ?? ''), (string)($r2['from'] ?? ''));
+            });
+            $x[$d] = $rows;
+        }
+        return $x;
+    };
+    return $normalize($a) === $normalize($b);
+}
+
+function e360_format_availability_text(array $availability): string {
+    $days = [
+        'mon' => 'Mon', 'tue' => 'Tue', 'wed' => 'Wed', 'thu' => 'Thu',
+        'fri' => 'Fri', 'sat' => 'Sat', 'sun' => 'Sun',
+    ];
+    $out = [];
+    foreach ($days as $k => $label) {
+        $rows = isset($availability[$k]) && is_array($availability[$k]) ? $availability[$k] : [];
+        if (!$rows) {
+            $out[] = $label . ': -';
+            continue;
+        }
+        $parts = [];
+        foreach ($rows as $r) {
+            $f = (string)($r['from'] ?? '');
+            $t = (string)($r['to'] ?? '');
+            if ($f !== '' && $t !== '') $parts[] = $f . '-' . $t;
+        }
+        $out[] = $label . ': ' . ($parts ? implode(', ', $parts) : '-');
+    }
+    return implode("\n", $out);
+}
+
+function e360_get_teacher_student_emails(int $teacher_id): array {
+    $emails = [];
+
+    // Primary teacher links.
+    $q = new WP_User_Query([
+        'fields' => ['ID', 'user_email'],
+        'number' => 1000,
+        'meta_key' => 'e360_primary_teacher_id',
+        'meta_value' => $teacher_id,
+    ]);
+    foreach ((array)$q->get_results() as $u) {
+        $mail = sanitize_email((string)($u->user_email ?? ''));
+        if ($mail !== '') $emails[] = $mail;
+    }
+
+    // Students from bookings with this teacher.
+    $booking_ids = get_posts([
+        'post_type' => 'e360_booking',
+        'post_status' => ['publish', 'pending'],
+        'fields' => 'ids',
+        'numberposts' => 500,
+        'meta_query' => [
+            ['key' => 'teacher_id', 'value' => $teacher_id, 'compare' => '=', 'type' => 'NUMERIC'],
+        ],
+    ]);
+    foreach ((array)$booking_ids as $bid) {
+        $sid = (int) get_post_meta((int)$bid, 'student_id', true);
+        if ($sid <= 0) continue;
+        $u = get_user_by('id', $sid);
+        if (!$u) continue;
+        $mail = sanitize_email((string)$u->user_email);
+        if ($mail !== '') $emails[] = $mail;
+    }
+
+    return array_values(array_unique($emails));
+}
+
+function e360_send_teacher_availability_notifications(int $teacher_id, array $old_availability, array $new_availability, string $old_tz, string $new_tz): void {
+    if (!function_exists('wp_mail')) return;
+    if (e360_availability_equals($old_availability, $new_availability) && $old_tz === $new_tz) return;
+
+    $teacher = get_user_by('id', $teacher_id);
+    $teacher_name = $teacher ? $teacher->display_name : ('Teacher #' . $teacher_id);
+    $site = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
+    $subject = '[' . $site . '] Teacher availability updated: ' . $teacher_name;
+
+    $body = "Teacher: {$teacher_name} (ID {$teacher_id})\n";
+    $body .= "Timezone: {$old_tz} -> {$new_tz}\n\n";
+    $body .= "Updated availability:\n";
+    $body .= e360_format_availability_text($new_availability) . "\n";
+
+    $headers = ['Content-Type: text/plain; charset=UTF-8'];
+
+    // Admins.
+    $admin_emails = [];
+    $default_admin = sanitize_email((string)get_option('admin_email'));
+    if ($default_admin !== '') $admin_emails[] = $default_admin;
+    $admins = get_users(['role' => 'administrator', 'fields' => ['user_email']]);
+    foreach ((array)$admins as $a) {
+        $mail = sanitize_email((string)($a->user_email ?? ''));
+        if ($mail !== '') $admin_emails[] = $mail;
+    }
+    $admin_emails = array_values(array_unique($admin_emails));
+    if ($admin_emails) wp_mail($admin_emails, $subject, $body, $headers);
+
+    // Students connected to this teacher.
+    $student_emails = e360_get_teacher_student_emails($teacher_id);
+    foreach ($student_emails as $mail) {
+        wp_mail($mail, $subject, $body, $headers);
+    }
+}
+
 /**
  * ==================
  * Teacher calendar UI
@@ -491,9 +602,14 @@ add_action('wp_ajax_e360_teacher_save_availability', function(){
         wp_send_json_error(['message'=>'Forbidden'], 403);
     }
 
+    $old_tz = e360_get_teacher_timezone_string($uid);
+    $old_availability = e360_get_teacher_availability($uid);
+
     $tz = isset($_POST['timezone']) ? sanitize_text_field(wp_unslash($_POST['timezone'])) : '';
     if ($tz && in_array($tz, timezone_identifiers_list(), true)) {
         update_user_meta($uid, 'e360_teacher_timezone', $tz);
+    } else {
+        $tz = $old_tz;
     }
 
     $raw = isset($_POST['availability']) ? wp_unslash($_POST['availability']) : '[]';
@@ -502,6 +618,7 @@ add_action('wp_ajax_e360_teacher_save_availability', function(){
 
     $clean = e360_sanitize_availability($arr);
     update_user_meta($uid, 'e360_teacher_availability', $clean);
+    e360_send_teacher_availability_notifications($uid, $old_availability, $clean, $old_tz, $tz);
 
     wp_send_json_success(['ok'=>1]);
 });
@@ -982,7 +1099,7 @@ function e360_get_teacher_bookings(int $teacher_id, int $course_id = 0, int $lim
         $meta[] = ['key' => 'course_id', 'value' => $course_id, 'compare' => '=', 'type' => 'NUMERIC'];
     }
 
-    return get_posts([
+    $ids = get_posts([
         'post_type' => 'e360_booking',
         'post_status' => ['publish', 'pending'],
         'numberposts' => $limit,
@@ -991,6 +1108,20 @@ function e360_get_teacher_bookings(int $teacher_id, int $course_id = 0, int $lim
         'order' => 'DESC',
         'meta_query' => $meta,
     ]);
+
+    if (!$ids || $course_id <= 0 || !function_exists('e360_is_student_enrolled_in_course')) {
+        return $ids;
+    }
+
+    $filtered = [];
+    foreach ($ids as $bid) {
+        $sid = (int) get_post_meta((int)$bid, 'student_id', true);
+        if ($sid > 0 && e360_is_student_enrolled_in_course($sid, $course_id)) {
+            $filtered[] = (int)$bid;
+        }
+    }
+
+    return $filtered;
 }
 
 function e360_render_teacher_bookings_box(array $booking_ids, array $args = []): string {
@@ -1460,16 +1591,19 @@ add_action('wp_footer', function () {
         li.id = 'e360-course-schedule-tab-nav';
         var firstItem = firstCtrl.closest('li');
         li.className = firstItem ? (firstItem.className || '') : '';
+        li.classList.remove('active', 'is-active');
 
         var ctrl;
         if ((firstCtrl.tagName || '').toLowerCase() === 'button') {
             ctrl = document.createElement('button');
             ctrl.type = 'button';
             ctrl.className = firstCtrl.className || '';
+            ctrl.classList.remove('active');
             ctrl.setAttribute('data-bs-toggle', 'tab');
             ctrl.setAttribute('data-bs-target', '#' + tabId);
             ctrl.setAttribute('aria-controls', tabId);
             ctrl.setAttribute('role', 'tab');
+            ctrl.setAttribute('aria-selected', 'false');
             ctrl.textContent = 'Schedule';
         } else {
             ctrl = document.createElement('a');
@@ -1477,6 +1611,8 @@ add_action('wp_footer', function () {
             ctrl.setAttribute('data-toggle', 'tab');
             ctrl.setAttribute('data-bs-toggle', 'tab');
             ctrl.className = firstCtrl.className || '';
+            ctrl.classList.remove('active');
+            ctrl.setAttribute('aria-selected', 'false');
             ctrl.textContent = 'Schedule';
         }
         if (firstItem) {

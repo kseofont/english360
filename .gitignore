@@ -8,9 +8,12 @@ login.txt
 
 test.html
 
+vendor/
+
 # common junk
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
 *.log
+
