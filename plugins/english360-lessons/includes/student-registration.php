@@ -585,6 +585,57 @@ function e360_get_slots() {
 
     wp_send_json_success(['slots' => $times]);
 }
+
+add_action('wp_ajax_e360_prepare_checkout', function() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Please log in first.'], 401);
+    }
+    check_ajax_referer('e360_booking_nonce', 'nonce');
+
+    $uid = get_current_user_id();
+    $ctx_raw = isset($_POST['ctx']) ? wp_unslash($_POST['ctx']) : '';
+    $ctx = json_decode((string)$ctx_raw, true);
+    if (!is_array($ctx) || empty($ctx)) {
+        wp_send_json_error(['message' => 'Invalid booking context.'], 400);
+    }
+
+    $clean = [
+        'language_term_id' => (int)($ctx['language_term_id'] ?? 0),
+        'level_term_id'    => (int)($ctx['level_term_id'] ?? 0),
+        'course_id'        => (int)($ctx['course_id'] ?? 0),
+        'teacher_id'       => (int)($ctx['teacher_id'] ?? 0),
+        'date'             => sanitize_text_field((string)($ctx['date'] ?? '')),
+        'time'             => sanitize_text_field((string)($ctx['time'] ?? '')),
+        'plan_product_id'  => (int)($ctx['plan_product_id'] ?? 0),
+        'duration'         => (int)($ctx['duration'] ?? 60),
+        'repeat'           => (($ctx['repeat'] ?? '') === 'once') ? 'once' : 'weekly',
+        'booking_format'   => e360_resolve_booking_format($ctx),
+        'created_at'       => current_time('mysql'),
+    ];
+
+    if ($clean['course_id'] <= 0 || $clean['teacher_id'] <= 0 || $clean['date'] === '' || $clean['time'] === '' || $clean['plan_product_id'] <= 0) {
+        wp_send_json_error(['message' => 'Missing required fields.'], 400);
+    }
+
+    update_user_meta($uid, 'e360_booking_context', $clean);
+    update_user_meta($uid, 'e360_primary_teacher_id', $clean['teacher_id']);
+    update_user_meta($uid, 'e360_primary_course_id', $clean['course_id']);
+
+    if (!function_exists('WC') || !WC()->cart) {
+        wp_send_json_error(['message' => 'WooCommerce cart is unavailable.'], 500);
+    }
+
+    WC()->session->set('e360_course_id', (int)$clean['course_id']);
+    WC()->cart->empty_cart();
+    WC()->cart->add_to_cart((int)$clean['plan_product_id'], 1, 0, [], [
+        'e360_course_id' => (int)$clean['course_id'],
+        'e360_booking_context' => $clean,
+    ]);
+
+    $checkout_url = function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : home_url('/checkout/');
+    wp_send_json_success(['checkout_url' => $checkout_url]);
+});
+
 add_shortcode('e360_booking_wizard', function($atts){
     $atts = shortcode_atts([
         'taxonomy'        => 'course-category',
@@ -614,7 +665,8 @@ add_shortcode('e360_booking_wizard', function($atts){
     ?>
 <div id="e360-wizard" data-taxonomy="<?php echo esc_attr($taxonomy); ?>"
     data-duration="<?php echo esc_attr($duration); ?>"
-    data-registration-url="<?php echo esc_attr($registration_url); ?>">
+    data-registration-url="<?php echo esc_attr($registration_url); ?>"
+    data-is-logged-in="<?php echo is_user_logged_in() ? '1' : '0'; ?>">
     <p>
         <label>What language would you like to learn?</label><br>
     <div id="e360-language" class="e360-language-cards"
@@ -1275,6 +1327,46 @@ jQuery(function($) {
         }
         if (!selected.plan_product_id) {
             $('#e360-msg').text('Select a lesson option first.');
+            return;
+        }
+
+        const payload = {
+            language_term_id: selected.language_term_id,
+            level_term_id: selected.level_term_id,
+            course_id: selected.course_id,
+            teacher_id: selected.teacher_id,
+            date: selected.date,
+            time: selected.time,
+            plan_product_id: selected.plan_product_id,
+            duration: selected.duration,
+            repeat: selected.repeat,
+            booking_format: selected.plan_kind || ''
+        };
+
+        const isLoggedIn = String($wiz.data('is-logged-in')) === '1';
+        if (isLoggedIn) {
+            $('#e360-msg').text('Preparing checkout…');
+            $.post(ajaxurl, {
+                action: 'e360_prepare_checkout',
+                nonce,
+                ctx: JSON.stringify(payload)
+            }).done(function(resp) {
+                if (!resp || !resp.success) {
+                    const m = (resp && resp.data && resp.data.message) ? resp.data.message :
+                        'Could not prepare checkout.';
+                    $('#e360-msg').text(m);
+                    return;
+                }
+                const checkoutUrl = (resp.data && resp.data.checkout_url) ? resp.data
+                    .checkout_url : '';
+                if (!checkoutUrl) {
+                    $('#e360-msg').text('Checkout URL is missing.');
+                    return;
+                }
+                window.location.href = checkoutUrl;
+            }).fail(function() {
+                $('#e360-msg').text('Request failed. Please try again.');
+            });
             return;
         }
 

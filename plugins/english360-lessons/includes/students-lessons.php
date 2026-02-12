@@ -60,6 +60,36 @@ function e360_student_credit_balance(int $student_id, int $course_id): int {
     return (int) e360_get_credits_balance($student_id, $course_id);
 }
 
+add_action('wp_ajax_e360_student_course_meta', function () {
+    if (!is_user_logged_in()) wp_send_json_error(['message' => 'Not logged in'], 401);
+    check_ajax_referer('e360_student_dash_meta', 'nonce');
+
+    $uid = (int) get_current_user_id();
+    $course_id = isset($_POST['course_id']) ? (int) $_POST['course_id'] : 0;
+    $course_url = isset($_POST['course_url']) ? esc_url_raw(wp_unslash($_POST['course_url'])) : '';
+
+    if ($course_id <= 0 && $course_url !== '') {
+        $course_id = (int) url_to_postid($course_url);
+    }
+    if ($course_id <= 0) {
+        wp_send_json_error(['message' => 'Course not found'], 400);
+    }
+
+    if (!current_user_can('manage_options') && !e360_student_is_enrolled_safe($uid, $course_id)) {
+        wp_send_json_error(['message' => 'Not enrolled'], 403);
+    }
+
+    $bal = e360_student_credit_balance($uid, $course_id);
+    $next_ts = e360_student_next_lesson_ts($uid, $course_id);
+    $next_txt = $next_ts ? date_i18n('Y-m-d H:i', $next_ts) : 'not scheduled';
+
+    wp_send_json_success([
+        'course_id' => $course_id,
+        'balance' => $bal,
+        'next_lesson' => $next_txt,
+    ]);
+});
+
 // -------- 1) course page widget --------
 
 add_action('wp_footer', function () {
@@ -121,6 +151,70 @@ add_action('wp_footer', function () {
 </script>
 <?php
     echo ob_get_clean();
+});
+
+// -------- 3) dashboard course cards: credits + next lesson --------
+add_action('wp_footer', function () {
+    if (!is_user_logged_in()) return;
+    if (current_user_can('tutor_instructor') && !current_user_can('manage_options')) return;
+
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    if (strpos($uri, '/dashboard') === false) return;
+
+    $ajax = admin_url('admin-ajax.php');
+    $nonce = wp_create_nonce('e360_student_dash_meta');
+    ?>
+<script>
+(function() {
+    var cards = document.querySelectorAll('.tutor-frontend-dashboard-course-progress .tutor-course-progress-item');
+    if (!cards || !cards.length) return;
+
+    function post(data) {
+        return fetch(<?php echo wp_json_encode($ajax); ?>, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            },
+            body: (new URLSearchParams(data)).toString()
+        }).then(function(r) {
+            return r.json();
+        });
+    }
+
+    cards.forEach(function(card) {
+        var link = card.querySelector('.tutor-stretched-link');
+        if (!link || !link.href) return;
+
+        post({
+            action: 'e360_student_course_meta',
+            nonce: <?php echo wp_json_encode($nonce); ?>,
+            course_url: link.href
+        }).then(function(resp) {
+            if (!resp || !resp.success || !resp.data) return;
+
+            var body = card.querySelector('.tutor-card-body');
+            if (!body) return;
+
+            var box = body.querySelector('.e360-dashboard-student-meta');
+            if (!box) {
+                box = document.createElement('div');
+                box.className = 'e360-dashboard-student-meta tutor-fs-7 tutor-color-secondary';
+                box.style.marginTop = '10px';
+                box.style.paddingTop = '10px';
+                box.style.borderTop = '1px solid #f0f0f0';
+                body.appendChild(box);
+            }
+
+            var balance = (resp.data.balance !== undefined) ? resp.data.balance : 0;
+            var next = resp.data.next_lesson || 'not scheduled';
+            box.innerHTML = 'Credits remaining: <strong>' + balance +
+                '</strong><br>Next lesson: <strong>' + next + '</strong>';
+        }).catch(function() {});
+    });
+})();
+</script>
+<?php
 });
 
 // -------- 2) lesson page topbar widget --------
