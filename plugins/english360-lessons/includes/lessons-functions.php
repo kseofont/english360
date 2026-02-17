@@ -345,12 +345,16 @@ function e360_sync_primary_teacher_on_enrol($enrol_id, $new_status) {
     update_user_meta($student_id, 'e360_primary_teacher_id', $teacher_id);
 
     // Ensure chosen slot is reserved after enrollment.
-    if (function_exists('e360_find_booking_for_student_course') && function_exists('e360_create_booking_from_context')) {
-        $exists = e360_find_booking_for_student_course($student_id, $course_id);
-        if (!$exists && is_array($ctx) && !empty($ctx)) {
-            $ctx['course_id'] = $course_id;
-            $ctx['teacher_id'] = $teacher_id;
-            e360_create_booking_from_context($student_id, $ctx, ['require_credit' => false]);
+    if (is_array($ctx) && !empty($ctx)) {
+        $ctx['course_id'] = $course_id;
+        $ctx['teacher_id'] = $teacher_id;
+        if (function_exists('e360_create_bookings_from_context')) {
+            e360_create_bookings_from_context($student_id, $ctx, ['require_credit' => false]);
+        } elseif (function_exists('e360_find_booking_for_student_course') && function_exists('e360_create_booking_from_context')) {
+            $exists = e360_find_booking_for_student_course($student_id, $course_id);
+            if (!$exists) {
+                e360_create_booking_from_context($student_id, $ctx, ['require_credit' => false]);
+            }
         }
     }
 

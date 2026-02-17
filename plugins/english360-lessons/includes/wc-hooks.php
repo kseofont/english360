@@ -34,14 +34,33 @@ function e360_on_order_paid($order_id) {
             'booking_format'   => function_exists('e360_resolve_booking_format') ? e360_resolve_booking_format($ctx) : sanitize_key((string)($ctx['booking_format'] ?? '')),
             'created_at'       => current_time('mysql'),
         ];
+        if (function_exists('e360_sanitize_ctx_slots')) {
+            $clean['slots'] = e360_sanitize_ctx_slots(($ctx['slots'] ?? []), (string)$clean['repeat'], (int)$clean['duration']);
+        } else {
+            $clean['slots'] = [];
+        }
+        if (!$clean['slots'] && $clean['date'] !== '' && $clean['time'] !== '') {
+            $clean['slots'] = [[
+                'date' => $clean['date'],
+                'time' => substr((string)$clean['time'], 0, 5),
+                'repeat' => $clean['repeat'],
+                'duration' => (int)$clean['duration'],
+            ]];
+        }
+        if ($clean['slots']) {
+            $clean['date'] = (string)$clean['slots'][0]['date'];
+            $clean['time'] = (string)$clean['slots'][0]['time'];
+            $clean['repeat'] = (string)$clean['slots'][0]['repeat'];
+        }
 
         if ($clean['course_id'] > 0 && $clean['teacher_id'] > 0 && $clean['date'] !== '' && $clean['time'] !== '') {
             update_user_meta($user_id, 'e360_booking_context', $clean);
             update_user_meta($user_id, 'e360_primary_course_id', $clean['course_id']);
             update_user_meta($user_id, 'e360_primary_teacher_id', $clean['teacher_id']);
 
-            if (function_exists('e360_create_booking_from_context')) {
-                // Reserve slot immediately after payment; function is deduplicated by student+course.
+            if (function_exists('e360_create_bookings_from_context')) {
+                e360_create_bookings_from_context($user_id, $clean, ['require_credit' => false]);
+            } elseif (function_exists('e360_create_booking_from_context')) {
                 e360_create_booking_from_context($user_id, $clean, ['require_credit' => false]);
             }
         }

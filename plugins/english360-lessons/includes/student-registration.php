@@ -40,6 +40,38 @@ function e360_product_credits_for_display(int $product_id): int {
     return 0;
 }
 
+function e360_ctx_slot_labels(array $ctx): array {
+    $repeat = (($ctx['repeat'] ?? '') === 'once') ? 'once' : 'weekly';
+    $duration = (int)($ctx['duration'] ?? 60);
+    if ($duration <= 0) $duration = 60;
+
+    $slots = e360_sanitize_ctx_slots(($ctx['slots'] ?? []), $repeat, $duration);
+    if (!$slots && !empty($ctx['date']) && !empty($ctx['time'])) {
+        $slots = [[
+            'date' => sanitize_text_field((string)$ctx['date']),
+            'time' => substr(sanitize_text_field((string)$ctx['time']), 0, 5),
+            'repeat' => $repeat,
+            'duration' => $duration,
+        ]];
+    }
+
+    $labels = [];
+    foreach ((array)$slots as $slot) {
+        $date = sanitize_text_field((string)($slot['date'] ?? ''));
+        $time = substr(sanitize_text_field((string)($slot['time'] ?? '')), 0, 5);
+        if ($date === '' || $time === '') continue;
+        $labels[] = $date . ' ' . $time;
+    }
+
+    return array_values(array_unique($labels));
+}
+
+function e360_ctx_slot_html(array $ctx): string {
+    $labels = e360_ctx_slot_labels($ctx);
+    if (!$labels) return '';
+    return implode('<br>', array_map('esc_html', $labels));
+}
+
 // Save booking context from hidden input to order item meta
 add_action('woocommerce_checkout_create_order_line_item', function($item, $cart_item_key, $values, $order) {
 if (!empty($_POST['e360_booking_ctx_checkout'])) {
@@ -52,10 +84,18 @@ $plan_title = !empty($ctx['plan_product_id']) && function_exists('wc_get_product
 (wc_get_product($ctx['plan_product_id'])->get_name() ?? '') : '';
 $plan_credits = !empty($ctx['plan_product_id']) ? e360_product_credits_for_display((int)$ctx['plan_product_id']) : 0;
 $format_label = e360_booking_format_label(e360_resolve_booking_format($ctx));
+$slot_labels = e360_ctx_slot_labels($ctx);
 $item->add_meta_data('e360_course_id', $course_id, true);
 $item->add_meta_data('Course', $course_title . ($course_id ? ' (ID ' . $course_id . ')' : ''));
 $item->add_meta_data('Teacher', $teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ?? '')));
-$item->add_meta_data('Date/time', ($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5));
+if ($slot_labels) {
+    $item->add_meta_data('Date/time', $slot_labels[0]);
+    if (count($slot_labels) > 1) {
+        $item->add_meta_data('Schedule', implode(' | ', $slot_labels));
+    }
+} else {
+    $item->add_meta_data('Date/time', ($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5));
+}
 if ($plan_title) $item->add_meta_data('Package', $plan_title);
 if ($plan_credits > 0) $item->add_meta_data('Credits (lessons)', $plan_credits);
 $item->add_meta_data('Format', $format_label ?: 'Not set');
@@ -82,13 +122,18 @@ $plan_title = !empty($ctx['plan_product_id']) && function_exists('wc_get_product
 (wc_get_product($ctx['plan_product_id'])->get_name() ?? '') : '';
 $plan_credits = !empty($ctx['plan_product_id']) ? e360_product_credits_for_display((int)$ctx['plan_product_id']) : 0;
 $format_label = e360_booking_format_label(e360_resolve_booking_format($ctx));
+$slot_labels = e360_ctx_slot_labels($ctx);
+$slots_html = e360_ctx_slot_html($ctx);
 echo '<div id="e360-checkout-summary" style="padding:12px;border:1px solid #ddd;border-radius:10px;margin:12px 0;">';
     echo '<div style="font-weight:600;margin-bottom:6px;">Your lesson request</div>';
     echo '<div><strong>Course:</strong> ' . esc_html($course_title ?: ('#'.($ctx['course_id'] ?? ''))) . '</div>';
     echo '<div><strong>Teacher:</strong> ' . esc_html($teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ??
         ''))) . '</div>';
-    echo '<div><strong>Date/time:</strong> ' . esc_html(($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5)) .
-        '</div>';
+    if (count($slot_labels) > 1) {
+        echo '<div><strong>Schedule:</strong><br>' . wp_kses_post($slots_html) . '</div>';
+    } else {
+        echo '<div><strong>Date/time:</strong> ' . esc_html($slot_labels ? $slot_labels[0] : (($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5))) . '</div>';
+    }
     if ($plan_title) echo '<div><strong>Package:</strong> ' . esc_html($plan_title) . '</div>';
     if ($plan_credits > 0) echo '<div><strong>Credits (lessons):</strong> ' . esc_html((string)$plan_credits) . '</div>';
     if ($format_label) echo '<div><strong>Format:</strong> ' . esc_html($format_label) . '</div>';
@@ -129,12 +174,18 @@ $plan_title = !empty($ctx['plan_product_id']) && function_exists('wc_get_product
 (wc_get_product((int)$ctx['plan_product_id'])->get_name() ?? '') : '';
 $plan_credits = !empty($ctx['plan_product_id']) ? e360_product_credits_for_display((int)$ctx['plan_product_id']) : 0;
 $format_label = e360_booking_format_label(e360_resolve_booking_format($ctx));
+$slot_labels = e360_ctx_slot_labels($ctx);
+$slots_html = e360_ctx_slot_html($ctx);
 
 echo '<section id="e360-order-summary" style="margin-top:14px;padding:12px;border:1px solid #ddd;border-radius:10px;">';
 echo '<h2 style="margin:0 0 8px;font-size:18px;">Lesson request</h2>';
 echo '<p><strong>Course:</strong> ' . esc_html($course_title ?: ('#'.($ctx['course_id'] ?? ''))) . '</p>';
 echo '<p><strong>Teacher:</strong> ' . esc_html($teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ?? ''))) . '</p>';
-echo '<p><strong>Date/time:</strong> ' . esc_html(($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5)) . '</p>';
+if (count($slot_labels) > 1) {
+    echo '<p><strong>Schedule:</strong><br>' . wp_kses_post($slots_html) . '</p>';
+} else {
+    echo '<p><strong>Date/time:</strong> ' . esc_html($slot_labels ? $slot_labels[0] : (($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5))) . '</p>';
+}
 if ($plan_title) echo '<p><strong>Package:</strong> ' . esc_html($plan_title) . '</p>';
 if ($plan_credits > 0) echo '<p><strong>Credits (lessons):</strong> ' . esc_html((string)$plan_credits) . '</p>';
 if ($format_label) echo '<p><strong>Format:</strong> ' . esc_html($format_label) . '</p>';
@@ -219,10 +270,18 @@ $item_data[] = [
 'name' => 'Teacher',
 'value' => esc_html($teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ?? '')))
 ];
-$item_data[] = [
-'name' => 'Date/time',
-'value' => esc_html(($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5))
-];
+$slot_labels = e360_ctx_slot_labels($ctx);
+if (count($slot_labels) > 1) {
+    $item_data[] = [
+        'name' => 'Schedule',
+        'value' => esc_html(implode(' | ', $slot_labels))
+    ];
+} else {
+    $item_data[] = [
+        'name' => 'Date/time',
+        'value' => esc_html($slot_labels ? $slot_labels[0] : (($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5)))
+    ];
+}
 if (!empty($ctx['plan_product_id'])) {
 $plan_title = function_exists('wc_get_product') ? (wc_get_product($ctx['plan_product_id'])->get_name() ?? '') : '';
 $item_data[] = [
@@ -455,6 +514,7 @@ function e360_get_schedule_preview_bulk() {
     check_ajax_referer('e360_booking_nonce', 'nonce');
 
     $duration = isset($_POST['duration']) ? (int) $_POST['duration'] : 60;
+    $include_past_today = !empty($_POST['include_past_today']);
 
     $raw = isset($_POST['teacher_ids']) ? wp_unslash($_POST['teacher_ids']) : '[]';
     $teacher_ids = json_decode($raw, true);
@@ -498,7 +558,7 @@ function e360_get_schedule_preview_bulk() {
             $date = $teacher_now->modify("+$i day")->format('Y-m-d');
 
             $slots = function_exists('e360_generate_slots_for_teacher_date')
-                ? e360_generate_slots_for_teacher_date((int)$tid, $date, $duration)
+                ? e360_generate_slots_for_teacher_date((int)$tid, $date, $duration, $include_past_today)
                 : [];
 
             $count = is_array($slots) ? count($slots) : 0;
@@ -541,13 +601,14 @@ function e360_get_slots() {
     $teacher_id = isset($_POST['teacher_id']) ? (int) $_POST['teacher_id'] : 0;
     $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';
     $duration   = isset($_POST['duration']) ? (int) $_POST['duration'] : 60;
+    $include_past_today = !empty($_POST['include_past_today']);
 
     if (!$teacher_id || !$date) {
         wp_send_json_error(['message' => 'teacher_id and date required']);
     }
 
     $slots = function_exists('e360_generate_slots_for_teacher_date')
-        ? e360_generate_slots_for_teacher_date($teacher_id, $date, $duration)
+        ? e360_generate_slots_for_teacher_date($teacher_id, $date, $duration, $include_past_today)
         : [];
 
     // Determine student timezone (viewer)
@@ -586,6 +647,36 @@ function e360_get_slots() {
     wp_send_json_success(['slots' => $times]);
 }
 
+function e360_sanitize_ctx_slots($raw_slots, string $default_repeat = 'weekly', int $default_duration = 60): array {
+    $out = [];
+    if (!is_array($raw_slots)) return $out;
+    $default_repeat = ($default_repeat === 'once') ? 'once' : 'weekly';
+    if ($default_duration <= 0) $default_duration = 60;
+    foreach ($raw_slots as $row) {
+        if (!is_array($row)) continue;
+        $date = sanitize_text_field((string)($row['date'] ?? ''));
+        $time = sanitize_text_field((string)($row['time'] ?? ''));
+        $repeat = (($row['repeat'] ?? $default_repeat) === 'once') ? 'once' : 'weekly';
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) continue;
+        if (!preg_match('/^\d{2}:\d{2}/', $time)) continue;
+        $out[] = [
+            'date' => $date,
+            'time' => substr($time, 0, 5),
+            'repeat' => $repeat,
+            'duration' => $default_duration,
+        ];
+    }
+    $unique = [];
+    $clean = [];
+    foreach ($out as $r) {
+        $k = $r['date'] . '|' . $r['time'] . '|' . $r['repeat'];
+        if (isset($unique[$k])) continue;
+        $unique[$k] = 1;
+        $clean[] = $r;
+    }
+    return $clean;
+}
+
 add_action('wp_ajax_e360_prepare_checkout', function() {
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'Please log in first.'], 401);
@@ -612,8 +703,22 @@ add_action('wp_ajax_e360_prepare_checkout', function() {
         'booking_format'   => e360_resolve_booking_format($ctx),
         'created_at'       => current_time('mysql'),
     ];
+    $clean['slots'] = e360_sanitize_ctx_slots(($ctx['slots'] ?? []), $clean['repeat'], (int)$clean['duration']);
+    if (!$clean['slots'] && $clean['date'] !== '' && $clean['time'] !== '') {
+        $clean['slots'] = [[
+            'date' => $clean['date'],
+            'time' => substr((string)$clean['time'], 0, 5),
+            'repeat' => $clean['repeat'],
+            'duration' => (int)$clean['duration'],
+        ]];
+    }
+    if ($clean['slots']) {
+        $clean['date'] = (string)$clean['slots'][0]['date'];
+        $clean['time'] = (string)$clean['slots'][0]['time'];
+        $clean['repeat'] = (string)$clean['slots'][0]['repeat'];
+    }
 
-    if ($clean['course_id'] <= 0 || $clean['teacher_id'] <= 0 || $clean['date'] === '' || $clean['time'] === '' || $clean['plan_product_id'] <= 0) {
+    if ($clean['course_id'] <= 0 || $clean['teacher_id'] <= 0 || !$clean['slots'] || $clean['plan_product_id'] <= 0) {
         wp_send_json_error(['message' => 'Missing required fields.'], 400);
     }
 
@@ -744,11 +849,11 @@ add_shortcode('e360_booking_wizard', function($atts){
 
     <div id="e360-step-time" style="display:none;">
         <p style="margin:0 0 8px;font-weight:600;">Choose a convenient time</p>
-        <p>
+        <p id="e360-date-wrap" style="display:none;">
             <label>Select Date</label><br>
             <input type="date" id="e360-date" min="<?php echo esc_attr(date('Y-m-d')); ?>">
         </p>
-        <p>
+        <p id="e360-time-wrap" style="display:none;">
             <label>Available times</label><br>
             <select id="e360-time">
                 <option value="">Select date first…</option>
@@ -798,6 +903,7 @@ jQuery(function($) {
         plan_kind: null,
         course_key: null,
         repeat: 'weekly',
+        slots: [],
     };
 
     function resetAfterLanguage() {
@@ -820,6 +926,7 @@ jQuery(function($) {
         selected.plan_product_id = null;
         selected.plan_kind = null;
         selected.repeat = 'weekly';
+        selected.slots = [];
     }
 
     function resetAfterLevel() {
@@ -843,6 +950,7 @@ jQuery(function($) {
         selected.plan_product_id = null;
         selected.plan_kind = null;
         selected.repeat = 'weekly';
+        selected.slots = [];
     }
 
     function canShowTimeStep() {
@@ -920,6 +1028,7 @@ jQuery(function($) {
             action: 'e360_get_schedule_preview_bulk',
             nonce,
             duration: selected.duration,
+            include_past_today: 1,
             teacher_ids: JSON.stringify([teacherId])
         }).done(function(resp) {
             if (!resp || !resp.success) {
@@ -934,6 +1043,10 @@ jQuery(function($) {
                 return;
             }
 
+            function escHtml(v) {
+                return $('<div>').text(v || '').html();
+            }
+
             let s = '<div style="font-weight:600;margin-bottom:4px;">Next 7 days</div>';
             s += '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;">';
 
@@ -943,16 +1056,87 @@ jQuery(function($) {
                     weekday: 'short'
                 });
                 const day = d.date.slice(5);
-                const times = (d.times && d.times.length) ? d.times.join(', ') : '—';
-                s += `<div style="border:1px solid #eee;border-radius:10px;padding:6px;">
-                        <div style="font-size:12px;opacity:.8;">${weekday}, ${day}</div>
-                        <div style="font-size:12px;">${times}</div>
-                      </div>`;
+                const daySelected = (selected.slots || []).some(function(s) {
+                    return s && s.date === d.date;
+                });
+                const dayBorder = daySelected ? '#3e64de' : '#eee';
+                s += `<div class="e360-day-card" data-date="${escHtml(d.date)}" style="border:1px solid ${dayBorder};border-radius:10px;padding:6px;">
+                        <div style="font-size:12px;opacity:.8;">${escHtml(weekday)}, ${escHtml(day)}</div>`;
+                if (d.times && d.times.length) {
+                    s += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">';
+                    d.times.forEach(function(t) {
+                        const isActive = (selected.slots || []).some(function(s) {
+                            return s && s.date === d.date && s.time === t;
+                        });
+                        const btnStyle = isActive ?
+                            'border:1px solid #3e64de;background:#eef3ff;color:#1f3fb4;' :
+                            'border:1px solid #ddd;background:#fff;color:#222;';
+                        const btnClass = isActive ? 'e360-slot-btn e360-slot-active' :
+                            'e360-slot-btn';
+                        s +=
+                            `<button type="button" class="${btnClass}" data-date="${escHtml(d.date)}" data-time="${escHtml(t)}" style="font-size:12px;padding:2px 6px;border-radius:999px;cursor:pointer;${btnStyle}">${escHtml(t)}</button>`;
+                    });
+                    s += '</div>';
+                } else {
+                    s += '<div style="font-size:12px;opacity:.6;margin-top:6px;">—</div>';
+                }
+                s += '</div>';
             });
 
             s += '</div>';
+            s +=
+                '<div style="margin-top:8px;font-size:12px;opacity:.8;">Click a time slot to select lesson day and time.</div>';
             $box.html(s);
         });
+    }
+
+    function selectPreviewSlot(date, time) {
+        if (!date || !time) return;
+        if (!Array.isArray(selected.slots)) selected.slots = [];
+        const key = date + '|' + time;
+        const idx = selected.slots.findIndex(function(s) {
+            return (s && (s.date + '|' + s.time) === key);
+        });
+
+        if (selected.repeat === 'once') {
+            selected.slots = [{
+                date: date,
+                time: time,
+                repeat: 'once'
+            }];
+        } else {
+            if (idx >= 0) {
+                selected.slots.splice(idx, 1);
+            } else {
+                selected.slots.push({
+                    date: date,
+                    time: time,
+                    repeat: 'weekly'
+                });
+            }
+        }
+
+        if (selected.slots.length) {
+            selected.date = selected.slots[0].date;
+            selected.time = selected.slots[0].time;
+        } else {
+            selected.date = null;
+            selected.time = null;
+        }
+
+        $('#e360-date').val(selected.date || '');
+        $('#e360-time').html('<option value="">Select…</option>');
+        if (selected.time) {
+            $('#e360-time').append($('<option>', {
+                value: selected.time,
+                text: selected.time
+            }));
+            $('#e360-time').val(selected.time);
+        }
+        if (selected.teacher_id) {
+            loadTeacherSchedulePreview(selected.teacher_id);
+        }
+        $('#e360-msg').text('');
     }
 
     function applyPlanKind(planKind) {
@@ -960,6 +1144,7 @@ jQuery(function($) {
         selected.plan_product_id = null;
         selected.date = null;
         selected.time = null;
+        selected.slots = [];
         $('#e360-date').val('');
         $('#e360-time').html('<option value="">Select date first…</option>');
 
@@ -1072,7 +1257,8 @@ jQuery(function($) {
             nonce,
             teacher_id: teacherId,
             date: date,
-            duration: selected.duration
+            duration: selected.duration,
+            include_past_today: 1
         }).done(function(resp) {
             if (!resp.success) {
                 $('#e360-time').html('<option value="">Error</option>');
@@ -1263,6 +1449,7 @@ jQuery(function($) {
             selected.plan_product_id = null;
             selected.date = null;
             selected.time = null;
+            selected.slots = [];
 
             $('#e360-date').val('');
             $('#e360-time').html('<option value="">Select date first…</option>');
@@ -1293,6 +1480,14 @@ jQuery(function($) {
         selected.time = $(this).val() || null;
     });
 
+    $(document).on('click', '.e360-slot-btn', function(e) {
+        e.preventDefault();
+        const date = ($(this).data('date') || '').toString();
+        const time = ($(this).data('time') || '').toString();
+        if (!date || !time) return;
+        selectPreviewSlot(date, time);
+    });
+
     $('#e360-plan').on('change', function() {
         selected.plan_product_id = parseInt($(this).val(), 10) || null;
         updateTimeStepVisibility();
@@ -1315,13 +1510,40 @@ jQuery(function($) {
 
     $('#e360-repeat').on('change', function() {
         selected.repeat = $(this).val() || 'weekly';
+        if (selected.repeat === 'once' && Array.isArray(selected.slots) && selected.slots.length > 1) {
+            selected.slots = [selected.slots[0]];
+            selected.date = selected.slots[0].date;
+            selected.time = selected.slots[0].time;
+        }
+        if (Array.isArray(selected.slots)) {
+            selected.slots = selected.slots.map(function(s) {
+                if (!s) return s;
+                s.repeat = (selected.repeat === 'once') ? 'once' : 'weekly';
+                return s;
+            });
+        }
+        if (selected.teacher_id) loadTeacherSchedulePreview(selected.teacher_id);
     });
 
 
     // Continue -> student registration
     $('#e360-continue').on('click', function() {
+        if (!Array.isArray(selected.slots) || !selected.slots.length) {
+            if (selected.date && selected.time) {
+                selected.slots = [{
+                    date: selected.date,
+                    time: selected.time,
+                    repeat: (selected.repeat === 'once') ? 'once' : 'weekly'
+                }];
+            }
+        }
+        if (Array.isArray(selected.slots) && selected.slots.length) {
+            selected.date = selected.slots[0].date;
+            selected.time = selected.slots[0].time;
+        }
+
         if (!selected.language_term_id || !selected.level_term_id || !selected.course_id || !selected
-            .teacher_id || !selected.date || !selected.time) {
+            .teacher_id || !selected.slots || !selected.slots.length) {
             $('#e360-msg').text('Select language, level, course, date and time first.');
             return;
         }
@@ -1337,6 +1559,7 @@ jQuery(function($) {
             teacher_id: selected.teacher_id,
             date: selected.date,
             time: selected.time,
+            slots: selected.slots,
             plan_product_id: selected.plan_product_id,
             duration: selected.duration,
             repeat: selected.repeat,
@@ -1382,6 +1605,9 @@ jQuery(function($) {
         url.searchParams.set('plan_product_id', selected.plan_product_id);
         url.searchParams.set('duration', selected.duration);
         url.searchParams.set('repeat', selected.repeat);
+        if (selected.slots && selected.slots.length) {
+            url.searchParams.set('slots', encodeURIComponent(JSON.stringify(selected.slots)));
+        }
         if (selected.plan_kind) {
             url.searchParams.set('booking_format', selected.plan_kind);
         }
@@ -1432,6 +1658,7 @@ add_shortcode('e360_registration_booking_context', function () {
     $teacher_id = isset($_GET['teacher_id']) ? (int) $_GET['teacher_id'] : 0;
     $date       = isset($_GET['date']) ? sanitize_text_field($_GET['date']) : '';
     $time       = isset($_GET['time']) ? sanitize_text_field($_GET['time']) : '';
+    $slots_param = isset($_GET['slots']) ? wp_unslash((string)$_GET['slots']) : '';
     $booking_format = isset($_GET['booking_format']) ? sanitize_key($_GET['booking_format']) : '';
     $format_label = e360_booking_format_label($booking_format);
 
@@ -1553,12 +1780,30 @@ add_action('user_register', function($user_id){
         'booking_format'   => e360_resolve_booking_format($ctx),
         'created_at'       => current_time('mysql'),
     ];
+    $clean['repeat'] = (($ctx['repeat'] ?? '') === 'once') ? 'once' : 'weekly';
+    $clean['duration'] = (int)($ctx['duration'] ?? 60);
+    if ($clean['duration'] <= 0) $clean['duration'] = 60;
+    $clean['slots'] = e360_sanitize_ctx_slots(($ctx['slots'] ?? []), $clean['repeat'], (int)$clean['duration']);
+    if (!$clean['slots'] && $clean['date'] !== '' && $clean['time'] !== '') {
+        $clean['slots'] = [[
+            'date' => $clean['date'],
+            'time' => substr((string)$clean['time'], 0, 5),
+            'repeat' => $clean['repeat'],
+            'duration' => (int)$clean['duration'],
+        ]];
+    }
+    if ($clean['slots']) {
+        $clean['date'] = (string)$clean['slots'][0]['date'];
+        $clean['time'] = (string)$clean['slots'][0]['time'];
+    }
 
     update_user_meta($user_id, 'e360_booking_context', $clean);
     update_user_meta($user_id, 'e360_primary_teacher_id', (int)($ctx['teacher_id'] ?? 0));
     update_user_meta($user_id, 'e360_primary_course_id', (int)($ctx['course_id'] ?? 0));
-    if (function_exists('e360_create_booking_from_context')) {
-    e360_create_booking_from_context((int)$user_id, $clean);
+    if (function_exists('e360_create_bookings_from_context')) {
+        e360_create_bookings_from_context((int)$user_id, $clean);
+    } elseif (function_exists('e360_create_booking_from_context')) {
+        e360_create_booking_from_context((int)$user_id, $clean);
     }
 
 
@@ -1650,6 +1895,7 @@ add_action('wp_footer', function () {
     $teacher_id = isset($_GET['teacher_id']) ? (int) $_GET['teacher_id'] : 0;
     $date       = isset($_GET['date']) ? sanitize_text_field($_GET['date']) : '';
     $time       = isset($_GET['time']) ? sanitize_text_field($_GET['time']) : '';
+    $slots_param = isset($_GET['slots']) ? wp_unslash((string)$_GET['slots']) : '';
 
     $language_term_id = isset($_GET['language_term_id']) ? (int) $_GET['language_term_id'] : 0;
     $level_term_id    = isset($_GET['level_term_id']) ? (int) $_GET['level_term_id'] : 0;
@@ -1659,6 +1905,15 @@ add_action('wp_footer', function () {
 
 
     // Если параметров нет — ничего не показываем.
+    $slots = [];
+    if ($slots_param !== '') {
+        $decoded = json_decode(rawurldecode($slots_param), true);
+        if (is_array($decoded)) $slots = e360_sanitize_ctx_slots($decoded, 'weekly', 60);
+    }
+    if ((!$date || !$time) && $slots) {
+        $date = (string)$slots[0]['date'];
+        $time = (string)$slots[0]['time'];
+    }
     if (!$course_id || !$teacher_id || !$date || !$time) return;
 
     $course_title = $course_id ? get_the_title($course_id) : '';
@@ -1684,6 +1939,7 @@ add_action('wp_footer', function () {
         'duration' => $duration,
         'repeat'   => $repeat,
         'booking_format' => $format_key,
+        'slots'            => $slots,
 
 
     ];
@@ -1705,7 +1961,13 @@ if ($plan_product_id && function_exists('wc_get_product')) {
     <div style="font-weight:600;margin-bottom:6px;">Your lesson request</div>
     <div><strong>Course:</strong> <?php echo esc_html($course_title ?: ('#'.$course_id)); ?></div>
     <div><strong>Teacher:</strong> <?php echo esc_html($teacher_name); ?></div>
-    <div><strong>Date/time:</strong> <?php echo esc_html($date . ' ' . substr($time,0,5)); ?></div>
+    <?php $ctx_slot_labels = e360_ctx_slot_labels($ctx); ?>
+    <?php if (count($ctx_slot_labels) > 1): ?>
+    <div><strong>Schedule:</strong><br><?php echo wp_kses_post(e360_ctx_slot_html($ctx)); ?></div>
+    <?php else: ?>
+    <div><strong>Date/time:</strong>
+        <?php echo esc_html($ctx_slot_labels ? $ctx_slot_labels[0] : ($date . ' ' . substr($time,0,5))); ?></div>
+    <?php endif; ?>
     <?php if ($plan_title): ?>
     <div><strong>Package:</strong> <?php echo esc_html($plan_title . ($plan_price ? ' — ' . $plan_price : '')); ?></div>
     <?php endif; ?>
@@ -1752,6 +2014,7 @@ function e360_render_booking_context_in_profile($user){
 
     $course_title = !empty($ctx['course_id']) ? get_the_title((int)$ctx['course_id']) : '';
     $teacher = !empty($ctx['teacher_id']) ? get_user_by('id', (int)$ctx['teacher_id']) : null;
+    $slot_labels = e360_ctx_slot_labels($ctx);
 
     ?>
 <h2>English360 Booking Context</h2>
@@ -1766,7 +2029,13 @@ function e360_render_booking_context_in_profile($user){
     </tr>
     <tr>
         <th>Date / time</th>
-        <td><?php echo esc_html(($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5)); ?></td>
+        <td>
+            <?php if (count($slot_labels) > 1): ?>
+            <?php echo wp_kses_post(e360_ctx_slot_html($ctx)); ?>
+            <?php else: ?>
+            <?php echo esc_html($slot_labels ? $slot_labels[0] : (($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5))); ?>
+            <?php endif; ?>
+        </td>
     </tr>
     <tr>
         <th>Saved</th>
@@ -2079,6 +2348,12 @@ add_action('woocommerce_checkout_create_order', function($order){
         $duration = isset($_POST['duration']) ? (int) $_POST['duration'] : 60;
         $repeat = isset($_POST['repeat']) ? sanitize_text_field($_POST['repeat']) : 'weekly';
         $booking_format = isset($_POST['booking_format']) ? sanitize_key(wp_unslash($_POST['booking_format'])) : '';
+        $slots_raw = isset($_POST['e360_slots']) ? wp_unslash($_POST['e360_slots']) : '';
+        $slots = [];
+        if ($slots_raw !== '') {
+            $tmp = json_decode((string)$slots_raw, true);
+            if (is_array($tmp)) $slots = $tmp;
+        }
         if ($course_id && $teacher_id && $date && $time) {
             $ctx = [
                 'language_term_id' => $language_term_id,
@@ -2091,10 +2366,29 @@ add_action('woocommerce_checkout_create_order', function($order){
                 'duration'         => $duration,
                 'repeat'           => $repeat,
                 'booking_format'   => $booking_format,
+                'slots'            => $slots,
             ];
         }
     }
     if (is_array($ctx) && $ctx) {
+        $repeat = (($ctx['repeat'] ?? '') === 'once') ? 'once' : 'weekly';
+        $duration = (int)($ctx['duration'] ?? 60);
+        if ($duration <= 0) $duration = 60;
+        $slots = e360_sanitize_ctx_slots(($ctx['slots'] ?? []), $repeat, $duration);
+        if (!$slots && !empty($ctx['date']) && !empty($ctx['time'])) {
+            $slots = [[
+                'date' => sanitize_text_field((string)$ctx['date']),
+                'time' => substr(sanitize_text_field((string)$ctx['time']), 0, 5),
+                'repeat' => $repeat,
+                'duration' => $duration,
+            ]];
+        }
+        if ($slots) {
+            $ctx['date'] = (string)$slots[0]['date'];
+            $ctx['time'] = (string)$slots[0]['time'];
+            $ctx['repeat'] = (string)$slots[0]['repeat'];
+            $ctx['slots'] = $slots;
+        }
         $ctx['booking_format'] = e360_resolve_booking_format($ctx);
         $order->update_meta_data('_e360_booking_context', $ctx);
     }
@@ -2150,9 +2444,14 @@ add_action('woocommerce_admin_order_data_after_billing_address', function($order
         $course_title = !empty($ctx['course_id']) ? get_the_title((int)$ctx['course_id']) : '';
         $teacher = !empty($ctx['teacher_id']) ? get_user_by('id', (int)$ctx['teacher_id']) : null;
         $plan_credits = !empty($ctx['plan_product_id']) ? e360_product_credits_for_display((int)$ctx['plan_product_id']) : 0;
+        $slot_labels = e360_ctx_slot_labels($ctx);
         echo '<p><strong>Course:</strong> ' . esc_html($course_title ?: ('#'.($ctx['course_id'] ?? ''))) . '</p>';
         echo '<p><strong>Teacher:</strong> ' . esc_html($teacher ? $teacher->display_name : ('#'.($ctx['teacher_id'] ?? ''))) . '</p>';
-        echo '<p><strong>Date/time:</strong> ' . esc_html(($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5)) . '</p>';
+        if (count($slot_labels) > 1) {
+            echo '<p><strong>Schedule:</strong><br>' . wp_kses_post(e360_ctx_slot_html($ctx)) . '</p>';
+        } else {
+            echo '<p><strong>Date/time:</strong> ' . esc_html($slot_labels ? $slot_labels[0] : (($ctx['date'] ?? '') . ' ' . substr(($ctx['time'] ?? ''),0,5))) . '</p>';
+        }
         if (!empty($ctx['plan_product_id'])) {
             $plan_title = function_exists('wc_get_product') ? (wc_get_product($ctx['plan_product_id'])->get_name() ?? '') : '';
             echo '<p><strong>Package:</strong> ' . esc_html($plan_title) . '</p>';

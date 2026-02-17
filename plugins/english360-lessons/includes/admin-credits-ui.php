@@ -165,6 +165,30 @@ function e360_admin_booking_occurrences(int $booking_id, int $past_limit = 8, in
     return ['past' => $past, 'future' => $future, 'tz' => $tzName];
 }
 
+function e360_admin_get_booking_requests(int $booking_id): array {
+    if (function_exists('e360_get_booking_reschedule_requests')) {
+        return e360_get_booking_reschedule_requests($booking_id, false);
+    }
+    $rows = get_post_meta($booking_id, 'e360_reschedule_requests', true);
+    if (!is_array($rows)) return [];
+    $out = [];
+    foreach ($rows as $idx => $r) {
+        if (!is_array($r)) continue;
+        $status = sanitize_key((string)($r['status'] ?? 'pending'));
+        if (!in_array($status, ['pending', 'approved', 'rejected'], true)) $status = 'pending';
+        $out[] = [
+            'idx' => (int)$idx,
+            'status' => $status,
+            'student_id' => (int)($r['student_id'] ?? 0),
+            'proposed_date' => (string)($r['proposed_date'] ?? ''),
+            'proposed_time' => (string)($r['proposed_time'] ?? ''),
+            'reason' => (string)($r['reason'] ?? ''),
+            'created_at' => (string)($r['created_at'] ?? ''),
+        ];
+    }
+    return $out;
+}
+
 function e360_admin_update_booking_from_profile(int $booking_id, array $input): bool {
     $booking = get_post($booking_id);
     if (!$booking || $booking->post_type !== 'e360_booking') return false;
@@ -463,6 +487,78 @@ function e360_admin_credits_box($user){
 </table>
 <p class="description">To apply schedule edits, click "Update User" at the bottom of the profile page.</p>
 
+<h2>Reschedule Requests</h2>
+<table class="widefat striped" style="max-width:1200px;">
+    <thead>
+        <tr>
+            <th>Course</th>
+            <th>Teacher</th>
+            <th>Requested by</th>
+            <th>Proposed date</th>
+            <th>Proposed time</th>
+            <th>Reason</th>
+            <th>Status</th>
+            <th>Created</th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php
+        $request_rows_count = 0;
+        foreach ($bookings as $bid):
+            $bid = (int)$bid;
+            $course_id = (int)get_post_meta($bid, 'course_id', true);
+            $teacher_id = (int)get_post_meta($bid, 'teacher_id', true);
+            $course_title = $course_id ? get_the_title($course_id) : '';
+            if (!$course_title) $course_title = 'Course #' . $course_id;
+            $teacher = $teacher_id ? get_user_by('id', $teacher_id) : null;
+            $teacher_label = $teacher ? $teacher->display_name : ('Teacher #' . $teacher_id);
+            $requests = e360_admin_get_booking_requests($bid);
+            if (!$requests) continue;
+            foreach ($requests as $r):
+                $request_rows_count++;
+                $ridx = (int)($r['idx'] ?? 0);
+                $rid = $bid . '_' . $ridx;
+                $req_student_id = (int)($r['student_id'] ?? 0);
+                $req_student = $req_student_id ? get_user_by('id', $req_student_id) : null;
+                $req_student_label = $req_student ? $req_student->display_name : ('Student #' . $req_student_id);
+        ?>
+        <tr>
+            <td><?php echo esc_html($course_title); ?> (#<?php echo (int)$course_id; ?>)</td>
+            <td><?php echo esc_html($teacher_label); ?> (#<?php echo (int)$teacher_id; ?>)</td>
+            <td><?php echo esc_html($req_student_label); ?></td>
+            <td>
+                <input type="date" name="e360_admin_request[<?php echo esc_attr($rid); ?>][proposed_date]"
+                    value="<?php echo esc_attr((string)($r['proposed_date'] ?? '')); ?>">
+            </td>
+            <td>
+                <input type="time" name="e360_admin_request[<?php echo esc_attr($rid); ?>][proposed_time]"
+                    value="<?php echo esc_attr((string)($r['proposed_time'] ?? '')); ?>">
+            </td>
+            <td>
+                <input type="text" name="e360_admin_request[<?php echo esc_attr($rid); ?>][reason]"
+                    value="<?php echo esc_attr((string)($r['reason'] ?? '')); ?>" style="min-width:260px;">
+            </td>
+            <td>
+                <select name="e360_admin_request[<?php echo esc_attr($rid); ?>][status]">
+                    <option value="pending" <?php selected((string)($r['status'] ?? ''), 'pending'); ?>>Pending</option>
+                    <option value="approved" <?php selected((string)($r['status'] ?? ''), 'approved'); ?>>Approved
+                    </option>
+                    <option value="rejected" <?php selected((string)($r['status'] ?? ''), 'rejected'); ?>>Rejected
+                    </option>
+                </select>
+            </td>
+            <td><?php echo esc_html((string)($r['created_at'] ?? '')); ?></td>
+        </tr>
+        <?php endforeach; endforeach; ?>
+        <?php if ($request_rows_count === 0): ?>
+        <tr>
+            <td colspan="8" style="opacity:.7;">No reschedule requests found for this student.</td>
+        </tr>
+        <?php endif; ?>
+    </tbody>
+</table>
+<p class="description">Admin can edit request details and status. Save by clicking "Update User".</p>
+
 <?php wp_nonce_field('e360_admin_credits_save', 'e360_admin_credits_nonce'); ?>
 <?php
 }
@@ -499,6 +595,41 @@ function e360_admin_credits_save($user_id){
             $bid = (int)$bid;
             if ($bid <= 0 || !is_array($row)) continue;
             e360_admin_update_booking_from_profile($bid, $row);
+        }
+    }
+
+    // reschedule requests edits from admin profile
+    $request_rows = isset($_POST['e360_admin_request']) ? wp_unslash($_POST['e360_admin_request']) : [];
+    if (is_array($request_rows)) {
+        foreach ($request_rows as $rid => $row) {
+            if (!is_array($row)) continue;
+            $rid = (string)$rid;
+            if (!preg_match('/^(\d+)_(\d+)$/', $rid, $m)) continue;
+            $bid = (int)$m[1];
+            $idx = (int)$m[2];
+            if ($bid <= 0 || $idx < 0) continue;
+
+            $requests = get_post_meta($bid, 'e360_reschedule_requests', true);
+            if (!is_array($requests) || !isset($requests[$idx]) || !is_array($requests[$idx])) continue;
+
+            $date = isset($row['proposed_date']) ? sanitize_text_field((string)$row['proposed_date']) : '';
+            $time = isset($row['proposed_time']) ? sanitize_text_field((string)$row['proposed_time']) : '';
+            $reason = isset($row['reason']) ? sanitize_text_field((string)$row['reason']) : '';
+            $status = isset($row['status']) ? sanitize_key((string)$row['status']) : 'pending';
+            if (!in_array($status, ['pending', 'approved', 'rejected'], true)) $status = 'pending';
+
+            if ($date !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                $requests[$idx]['proposed_date'] = $date;
+            }
+            if ($time !== '' && preg_match('/^\d{2}:\d{2}$/', $time)) {
+                $requests[$idx]['proposed_time'] = $time;
+            }
+            $requests[$idx]['reason'] = $reason;
+            $requests[$idx]['status'] = $status;
+            $requests[$idx]['updated_by_admin'] = (int)get_current_user_id();
+            $requests[$idx]['updated_at'] = current_time('mysql');
+
+            update_post_meta($bid, 'e360_reschedule_requests', $requests);
         }
     }
 }

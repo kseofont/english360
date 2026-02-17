@@ -292,6 +292,80 @@ function e360_send_teacher_availability_notifications(int $teacher_id, array $ol
     }
 }
 
+function e360_teacher_booked_notes_by_weekday(int $teacher_id, int $once_horizon_days = 90): array {
+    $out = [
+        'mon' => [], 'tue' => [], 'wed' => [], 'thu' => [], 'fri' => [], 'sat' => [], 'sun' => []
+    ];
+    $tz = new DateTimeZone(e360_get_teacher_timezone_string($teacher_id));
+
+    $append = function(string $weekday, int $fromMin, int $toMin, string $note) use (&$out) {
+        if (!isset($out[$weekday])) return;
+        if ($toMin <= $fromMin) return;
+        $toStr = ($toMin >= 24 * 60) ? '24:00' : e360_hhmm_from_minutes($toMin);
+        $out[$weekday][] = [
+            'from' => e360_hhmm_from_minutes($fromMin),
+            'to'   => $toStr,
+            'note' => $note,
+        ];
+    };
+
+    $ids = get_posts([
+        'post_type' => 'e360_booking',
+        'post_status' => ['publish', 'pending'],
+        'numberposts' => 500,
+        'fields' => 'ids',
+        'meta_query' => [
+            ['key' => 'teacher_id', 'value' => $teacher_id, 'compare' => '=', 'type' => 'NUMERIC'],
+        ],
+    ]);
+
+    $nowUtc = current_time('timestamp', true);
+    $horizonUtc = $nowUtc + ($once_horizon_days * DAY_IN_SECONDS);
+
+    foreach ((array)$ids as $bid) {
+        $bid = (int)$bid;
+        $repeat = (string) get_post_meta($bid, 'repeat', true);
+        $course_id = (int) get_post_meta($bid, 'course_id', true);
+        $student_id = (int) get_post_meta($bid, 'student_id', true);
+
+        $course_title = $course_id ? get_the_title($course_id) : '';
+        if ($course_title === '') $course_title = 'Course #' . $course_id;
+        $student_label = function_exists('e360_user_public_label_simple')
+            ? e360_user_public_label_simple($student_id)
+            : ('Student #' . $student_id);
+
+        if ($repeat === 'weekly') {
+            $weekday = (string) get_post_meta($bid, 'weekday', true);
+            $fromMin = (int) get_post_meta($bid, 'start_min', true);
+            $toMin   = (int) get_post_meta($bid, 'end_min', true);
+            $append($weekday, $fromMin, $toMin, $course_title . ' — ' . $student_label . ' (weekly)');
+            continue;
+        }
+
+        $startUtc = (int) get_post_meta($bid, 'start_ts_utc', true);
+        $endUtc   = (int) get_post_meta($bid, 'end_ts_utc', true);
+        if ($startUtc <= 0 || $endUtc <= 0) continue;
+        if ($endUtc < $nowUtc || $startUtc > $horizonUtc) continue;
+
+        $startLocal = (new DateTimeImmutable('@' . $startUtc))->setTimezone($tz);
+        $endLocal   = (new DateTimeImmutable('@' . $endUtc))->setTimezone($tz);
+        $weekday = strtolower(substr($startLocal->format('D'), 0, 3));
+        $fromMin = ((int)$startLocal->format('H')) * 60 + (int)$startLocal->format('i');
+        $toMin   = ((int)$endLocal->format('H')) * 60 + (int)$endLocal->format('i');
+        if ($toMin <= $fromMin) $toMin = $fromMin + 60;
+        $dateTxt = $startLocal->format('Y-m-d');
+        $append($weekday, $fromMin, $toMin, $course_title . ' — ' . $student_label . ' (' . $dateTxt . ')');
+    }
+
+    foreach (['mon','tue','wed','thu','fri','sat','sun'] as $d) {
+        usort($out[$d], function($a, $b){
+            return strcmp((string)$a['from'], (string)$b['from']);
+        });
+    }
+
+    return $out;
+}
+
 /**
  * ==================
  * Teacher calendar UI
@@ -315,6 +389,8 @@ add_shortcode('e360_teacher_calendar_settings', function(){
     data-nonce="<?php echo esc_attr($nonce); ?>">
     <div style="padding:12px;border:1px solid #e5e5e5;border-radius:12px;">
         <div style="font-weight:700;margin-bottom:10px;">Teacher availability</div>
+        <div style="font-size:12px;opacity:.8;margin:-4px 0 10px;">Use 24-hour format: <strong>HH:MM</strong> (example:
+            09:00, 14:30)</div>
 
         <div style="margin:0 0 10px;">
             <label style="display:block;font-weight:600;margin-bottom:6px;">Your timezone</label>
@@ -452,17 +528,30 @@ add_shortcode('e360_teacher_calendar_settings', function(){
         function rangeRow(fromVal = '', toVal = '') {
             return `
                 <div class="e360-range" style="display:flex;gap:8px;align-items:center;margin:6px 0;">
-                    <input type="time" class="e360-from" value="${esc(fromVal)}">
+                    <input type="text" inputmode="numeric" class="e360-from" value="${esc(fromVal)}" placeholder="HH:MM" pattern="^([01]\\d|2[0-3]):[0-5]\\d$" title="Use 24-hour format HH:MM">
                     <span>–</span>
-                    <input type="time" class="e360-to" value="${esc(toVal)}">
+                    <input type="text" inputmode="numeric" class="e360-to" value="${esc(toVal)}" placeholder="HH:MM" pattern="^([01]\\d|2[0-3]):[0-5]\\d$" title="Use 24-hour format HH:MM">
                     <button type="button" class="button e360-del tutor-btn tutor-btn-danger tutor-create-new-course tutor-dashboard-create-course" style="margin-left:auto;">Remove</button>
                 </div>`;
+        }
+
+        function normalizeHHMM(raw) {
+            const s = (raw || '').trim().replace(/\s+/g, '');
+            const m = s.match(/^(\d{1,2}):(\d{2})$/);
+            if (!m) return '';
+            const hh = parseInt(m[1], 10);
+            const mm = parseInt(m[2], 10);
+            if (Number.isNaN(hh) || Number.isNaN(mm)) return '';
+            if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return '';
+            return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
         }
 
         function renderDays(data) {
             wrapDays.innerHTML = '';
             keys.forEach(k => {
                 const ranges = (data && data[k]) ? data[k] : [];
+                const booked = (window.__e360Booked && window.__e360Booked[k]) ? window.__e360Booked[k] :
+            [];
                 let html = `
                     <div class="e360-day" data-day="${k}" style="border:1px solid #eee;border-radius:12px;padding:10px;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -476,6 +565,20 @@ add_shortcode('e360_teacher_calendar_settings', function(){
                         `<div class="e360-empty" style="opacity:.7;font-size:13px;margin-top:6px;">No ranges</div>`;
                 } else {
                     ranges.forEach(r => html += rangeRow(r.from, r.to));
+                }
+                if (booked.length) {
+                    html +=
+                        `<div class="e360-booked" style="margin-top:8px;padding-top:8px;border-top:1px dashed #ddd;">
+                        <div style="font-size:12px;font-weight:700;opacity:.85;margin-bottom:4px;">Booked lessons</div>`;
+                    booked.forEach(function(b) {
+                        const from = esc((b.from || '').toString());
+                        const to = esc((b.to || '').toString());
+                        const note = esc((b.note || '').toString());
+                        html += `<div style="font-size:12px;line-height:1.35;margin-bottom:2px;">
+                            <strong>${from}-${to}</strong> · ${note}
+                        </div>`;
+                    });
+                    html += `</div>`;
                 }
                 html += `</div></div>`;
                 wrapDays.insertAdjacentHTML('beforeend', html);
@@ -514,9 +617,11 @@ add_shortcode('e360_teacher_calendar_settings', function(){
             .then(r => r.json())
             .then(resp => {
                 if (!resp || !resp.success) {
+                    window.__e360Booked = {};
                     renderDays({});
                     return;
                 }
+                window.__e360Booked = resp.data.booked || {};
                 renderDays(resp.data.availability || {});
                 if (resp.data.timezone) tzSelect.value = resp.data.timezone;
             });
@@ -538,6 +643,14 @@ add_shortcode('e360_teacher_calendar_settings', function(){
                 delBtn.closest('.e360-range').remove();
             }
         });
+
+        root.addEventListener('blur', function(e) {
+            const input = e.target;
+            if (!input || !(input.classList.contains('e360-from') || input.classList.contains('e360-to')))
+                return;
+            const norm = normalizeHHMM(input.value);
+            if (norm) input.value = norm;
+        }, true);
 
         // save
         saveBtn.addEventListener('click', function() {
@@ -590,6 +703,7 @@ add_action('wp_ajax_e360_teacher_get_availability', function(){
     wp_send_json_success([
         'availability' => e360_get_teacher_availability($uid),
         'timezone' => e360_get_teacher_timezone_string($uid),
+        'booked' => e360_teacher_booked_notes_by_weekday($uid),
     ]);
 });
 
@@ -752,6 +866,7 @@ function e360_get_booked_intervals_for_date(int $teacher_id, string $ymd, int $d
     ]);
 
     foreach ($weekly as $pid) {
+        if (e360_booking_has_skip_date((int)$pid, $ymd)) continue;
         $s = (int) get_post_meta((int)$pid, 'start_min', true);
         $e = (int) get_post_meta((int)$pid, 'end_min', true);
         if ($e > $s) $intervals[] = [$s, $e];
@@ -760,7 +875,7 @@ function e360_get_booked_intervals_for_date(int $teacher_id, string $ymd, int $d
     return $intervals;
 }
 
-function e360_generate_slots_for_teacher_date(int $teacher_id, string $ymd, int $duration_min): array {
+function e360_generate_slots_for_teacher_date(int $teacher_id, string $ymd, int $duration_min, bool $include_past_today = false): array {
     $availability = e360_get_teacher_availability($teacher_id);
     $tz = new DateTimeZone(e360_get_teacher_timezone_string($teacher_id));
     $weekday = e360_weekday_key_from_date($ymd, $tz);
@@ -780,11 +895,15 @@ function e360_generate_slots_for_teacher_date(int $teacher_id, string $ymd, int 
         $to   = (string)($r['to'] ?? '');
         $start = e360_minutes_from_hhmm($from);
         $end   = e360_minutes_from_hhmm($to);
+        if ($end <= $start && $to === '00:00') {
+            // Treat midnight as end-of-day for ranges like 09:00 -> 12:00 AM.
+            $end = 24 * 60;
+        }
         if ($end <= $start) continue;
 
         // step by duration
         for ($m = $start; ($m + $duration_min) <= $end; $m += $duration_min) {
-            if ($isToday && $m < $nowMin) continue;
+            if (!$include_past_today && $isToday && $m < $nowMin) continue;
 
             // conflict check against booked intervals
             $mEnd = $m + $duration_min;
@@ -826,6 +945,140 @@ function e360_find_booking_for_student_course(int $student_id, int $course_id, i
     ]);
 
     return !empty($posts) ? (int) $posts[0] : 0;
+}
+
+function e360_booking_skip_dates(int $booking_id): array {
+    $rows = get_post_meta($booking_id, 'e360_skip_dates', true);
+    if (!is_array($rows)) return [];
+    $out = [];
+    foreach ($rows as $d) {
+        $d = sanitize_text_field((string)$d);
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) $out[] = $d;
+    }
+    $out = array_values(array_unique($out));
+    sort($out);
+    return $out;
+}
+
+function e360_booking_has_skip_date(int $booking_id, string $ymd): bool {
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ymd)) return false;
+    $skip = e360_booking_skip_dates($booking_id);
+    return in_array($ymd, $skip, true);
+}
+
+function e360_booking_add_skip_date(int $booking_id, string $ymd): void {
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ymd)) return;
+    $skip = e360_booking_skip_dates($booking_id);
+    if (!in_array($ymd, $skip, true)) $skip[] = $ymd;
+    $skip = array_values(array_unique($skip));
+    sort($skip);
+    update_post_meta($booking_id, 'e360_skip_dates', $skip);
+}
+
+function e360_ctx_normalize_slots(array $ctx): array {
+    $slots = [];
+    $duration = (int)($ctx['duration'] ?? 60);
+    if ($duration <= 0) $duration = 60;
+    $default_repeat = (($ctx['repeat'] ?? '') === 'once') ? 'once' : 'weekly';
+
+    if (!empty($ctx['slots']) && is_array($ctx['slots'])) {
+        foreach ($ctx['slots'] as $row) {
+            if (!is_array($row)) continue;
+            $date = sanitize_text_field((string)($row['date'] ?? ''));
+            $time = sanitize_text_field((string)($row['time'] ?? ''));
+            $repeat = (($row['repeat'] ?? $default_repeat) === 'once') ? 'once' : 'weekly';
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) continue;
+            if (!preg_match('/^\d{2}:\d{2}/', $time)) continue;
+            $slots[] = [
+                'date' => $date,
+                'time' => substr($time, 0, 5),
+                'repeat' => $repeat,
+                'duration' => $duration,
+            ];
+        }
+    }
+
+    if (!$slots) {
+        $date = sanitize_text_field((string)($ctx['date'] ?? ''));
+        $time = sanitize_text_field((string)($ctx['time'] ?? ''));
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) && preg_match('/^\d{2}:\d{2}/', $time)) {
+            $slots[] = [
+                'date' => $date,
+                'time' => substr($time, 0, 5),
+                'repeat' => $default_repeat,
+                'duration' => $duration,
+            ];
+        }
+    }
+
+    return $slots;
+}
+
+function e360_booking_exists_for_slot_ctx(int $student_id, int $course_id, int $teacher_id, array $slot): bool {
+    $repeat = (($slot['repeat'] ?? '') === 'once') ? 'once' : 'weekly';
+    $date = sanitize_text_field((string)($slot['date'] ?? ''));
+    $time = sanitize_text_field((string)($slot['time'] ?? ''));
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !preg_match('/^\d{2}:\d{2}$/', $time)) return false;
+
+    $base_meta = [
+        ['key' => 'course_id', 'value' => $course_id, 'compare' => '=', 'type' => 'NUMERIC'],
+        ['key' => 'student_id', 'value' => $student_id, 'compare' => '=', 'type' => 'NUMERIC'],
+        ['key' => 'teacher_id', 'value' => $teacher_id, 'compare' => '=', 'type' => 'NUMERIC'],
+        ['key' => 'repeat', 'value' => $repeat, 'compare' => '='],
+    ];
+
+    if ($repeat === 'once') {
+        $ids = get_posts([
+            'post_type' => 'e360_booking',
+            'post_status' => ['publish', 'pending'],
+            'numberposts' => 1,
+            'fields' => 'ids',
+            'meta_query' => array_merge($base_meta, [
+                ['key' => 'local_date', 'value' => $date, 'compare' => '='],
+                ['key' => 'local_time', 'value' => $time, 'compare' => '='],
+            ]),
+        ]);
+        return !empty($ids);
+    }
+
+    $tz = new DateTimeZone(e360_get_teacher_timezone_string($teacher_id));
+    $weekday = e360_weekday_key_from_date($date, $tz);
+    $start_min = e360_minutes_from_hhmm($time);
+    $ids = get_posts([
+        'post_type' => 'e360_booking',
+        'post_status' => ['publish', 'pending'],
+        'numberposts' => 1,
+        'fields' => 'ids',
+        'meta_query' => array_merge($base_meta, [
+            ['key' => 'weekday', 'value' => $weekday, 'compare' => '='],
+            ['key' => 'start_min', 'value' => $start_min, 'compare' => '=', 'type' => 'NUMERIC'],
+        ]),
+    ]);
+    return !empty($ids);
+}
+
+function e360_create_bookings_from_context(int $student_id, array $ctx, array $opts = []): array {
+    $teacher_id = (int)($ctx['teacher_id'] ?? 0);
+    $course_id = (int)($ctx['course_id'] ?? 0);
+    if ($student_id <= 0 || $teacher_id <= 0 || $course_id <= 0) return [];
+
+    $slots = e360_ctx_normalize_slots($ctx);
+    if (!$slots) return [];
+
+    $created = [];
+    foreach ($slots as $slot) {
+        if (e360_booking_exists_for_slot_ctx($student_id, $course_id, $teacher_id, $slot)) {
+            continue;
+        }
+        $one = $ctx;
+        $one['date'] = $slot['date'];
+        $one['time'] = $slot['time'];
+        $one['repeat'] = $slot['repeat'];
+        $one['duration'] = (int)($slot['duration'] ?? ($ctx['duration'] ?? 60));
+        $id = e360_create_booking_from_context($student_id, $one, array_merge($opts, ['force_new' => true]));
+        if ($id) $created[] = (int)$id;
+    }
+    return $created;
 }
 
 /**
@@ -958,8 +1211,18 @@ function e360_booking_next_occurrence_ts(int $booking_id): int {
     $hhmm = e360_hhmm_from_minutes($startMin);
     $dtLocal = DateTimeImmutable::createFromFormat('Y-m-d H:i', $candidateYmd . ' ' . $hhmm, $tz);
     if (!$dtLocal) return 0;
+    $candidateUtc = (int) $dtLocal->setTimezone(new DateTimeZone('UTC'))->getTimestamp();
 
-    return (int) $dtLocal->setTimezone(new DateTimeZone('UTC'))->getTimestamp();
+    $safety = 0;
+    while ($safety < 400) {
+        $localYmd = (new DateTimeImmutable('@' . $candidateUtc))->setTimezone($tz)->format('Y-m-d');
+        if (!e360_booking_has_skip_date($booking_id, $localYmd)) {
+            return $candidateUtc;
+        }
+        $candidateUtc += 7 * DAY_IN_SECONDS;
+        $safety++;
+    }
+    return 0;
 }
 
 /**
@@ -1022,6 +1285,58 @@ add_action('wp_ajax_e360_reschedule_booking', function(){
 
     $repeat = ($repeat === 'weekly') ? 'weekly' : 'once';
     $tz = new DateTimeZone(e360_get_teacher_timezone_string($teacher_id));
+    $current_repeat = (string) get_post_meta($booking_id, 'repeat', true);
+
+    // One-time move for weekly booking: keep weekly pattern, move only nearest lesson.
+    if ($repeat === 'once' && $current_repeat === 'weekly') {
+        $hhmm = substr($time,0,5);
+        $dtLocal = DateTimeImmutable::createFromFormat('Y-m-d H:i', $date.' '.$hhmm, $tz);
+        if (!$dtLocal) wp_send_json_error(['message'=>'Bad datetime'], 400);
+
+        $slots = e360_generate_slots_for_teacher_date($teacher_id, $date, $duration);
+        if (!in_array($hhmm, $slots, true)) {
+            wp_send_json_error(['message'=>'Selected time is not available'], 409);
+        }
+
+        $nextOldUtc = e360_booking_next_occurrence_ts($booking_id);
+        if ($nextOldUtc <= 0) wp_send_json_error(['message'=>'No upcoming weekly lesson to move'], 400);
+        $nextOldYmd = (new DateTimeImmutable('@' . $nextOldUtc))->setTimezone($tz)->format('Y-m-d');
+
+        $startUtc = (int) $dtLocal->setTimezone(new DateTimeZone('UTC'))->getTimestamp();
+        $endUtc = $startUtc + $duration*60;
+        if (e360_booking_conflict_once($teacher_id, $startUtc, $endUtc)) {
+            wp_send_json_error(['message'=>'Time is already booked'], 409);
+        }
+
+        $student_id = (int) get_post_meta($booking_id, 'student_id', true);
+        $course_id = (int) get_post_meta($booking_id, 'course_id', true);
+        $new_id = wp_insert_post([
+            'post_type' => 'e360_booking',
+            'post_status' => 'publish',
+            'post_author' => $student_id ?: get_current_user_id(),
+            'post_title' => 'Course Enrolled – ' . date_i18n('d.m.Y @ H:i', $startUtc),
+        ], true);
+        if (is_wp_error($new_id) || !$new_id) {
+            wp_send_json_error(['message'=>'Failed to create one-time booking'], 500);
+        }
+
+        update_post_meta($new_id, 'course_id', $course_id);
+        update_post_meta($new_id, 'teacher_id', $teacher_id);
+        update_post_meta($new_id, 'student_id', $student_id);
+        update_post_meta($new_id, 'repeat', 'once');
+        update_post_meta($new_id, 'duration_min', $duration);
+        update_post_meta($new_id, 'start_ts_utc', $startUtc);
+        update_post_meta($new_id, 'end_ts_utc', $endUtc);
+        update_post_meta($new_id, 'local_date', $date);
+        update_post_meta($new_id, 'local_time', $hhmm);
+        update_post_meta($new_id, 'e360_parent_booking_id', (int)$booking_id);
+
+        e360_booking_add_skip_date($booking_id, $nextOldYmd);
+
+        e360_mark_matching_reschedule_request_status($booking_id, $date, $hhmm, 'approved', (int)$uid);
+        $label = e360_next_occurrence_label($booking_id);
+        wp_send_json_success(['label'=>$label, 'override_once' => 1]);
+    }
 
     update_post_meta($booking_id, 'repeat', $repeat);
 
@@ -1069,8 +1384,304 @@ add_action('wp_ajax_e360_reschedule_booking', function(){
         delete_post_meta($booking_id, 'local_time');
     }
 
+    $req_time = substr($time, 0, 5);
+    e360_mark_matching_reschedule_request_status($booking_id, $date, $req_time, 'approved', (int)$uid);
     $label = e360_next_occurrence_label($booking_id);
     wp_send_json_success(['label'=>$label]);
+});
+
+add_action('wp_ajax_e360_teacher_delete_booking', function(){
+    if (!is_user_logged_in()) wp_send_json_error(['message'=>'Not logged in'], 401);
+    check_ajax_referer('e360_reschedule', 'nonce');
+
+    $uid = get_current_user_id();
+    if (!current_user_can('tutor_instructor') && !current_user_can('manage_options')) {
+        wp_send_json_error(['message'=>'Forbidden'], 403);
+    }
+
+    $booking_id = isset($_POST['booking_id']) ? (int)$_POST['booking_id'] : 0;
+    if ($booking_id <= 0) wp_send_json_error(['message'=>'Missing booking'], 400);
+    $p = get_post($booking_id);
+    if (!$p || $p->post_type !== 'e360_booking') wp_send_json_error(['message'=>'Invalid booking'], 400);
+
+    $teacher_id = (int) get_post_meta($booking_id, 'teacher_id', true);
+    if (!current_user_can('manage_options') && $teacher_id !== $uid) {
+        wp_send_json_error(['message'=>'Not your booking'], 403);
+    }
+
+    wp_trash_post($booking_id);
+    wp_send_json_success(['ok'=>1]);
+});
+
+add_action('wp_ajax_e360_teacher_add_booking', function(){
+    if (!is_user_logged_in()) wp_send_json_error(['message'=>'Not logged in'], 401);
+    check_ajax_referer('e360_reschedule', 'nonce');
+
+    $uid = get_current_user_id();
+    if (!current_user_can('tutor_instructor') && !current_user_can('manage_options')) {
+        wp_send_json_error(['message'=>'Forbidden'], 403);
+    }
+
+    $teacher_id = isset($_POST['teacher_id']) ? (int)$_POST['teacher_id'] : 0;
+    $student_id = isset($_POST['student_id']) ? (int)$_POST['student_id'] : 0;
+    $course_id = isset($_POST['course_id']) ? (int)$_POST['course_id'] : 0;
+    $date = isset($_POST['date']) ? sanitize_text_field(wp_unslash($_POST['date'])) : '';
+    $time = isset($_POST['time']) ? sanitize_text_field(wp_unslash($_POST['time'])) : '';
+    $repeat = isset($_POST['repeat']) ? sanitize_text_field(wp_unslash($_POST['repeat'])) : 'weekly';
+    $duration = isset($_POST['duration']) ? (int)$_POST['duration'] : 60;
+    if ($duration <= 0) $duration = 60;
+    $repeat = ($repeat === 'once') ? 'once' : 'weekly';
+
+    if ($teacher_id <= 0 || $student_id <= 0 || $course_id <= 0 || $date === '' || $time === '') {
+        wp_send_json_error(['message'=>'Missing data'], 400);
+    }
+    if (!current_user_can('manage_options') && $teacher_id !== $uid) {
+        wp_send_json_error(['message'=>'Not your course'], 403);
+    }
+    if (function_exists('e360_is_student_enrolled_in_course') && !e360_is_student_enrolled_in_course($student_id, $course_id)) {
+        wp_send_json_error(['message'=>'Student not enrolled in this course'], 400);
+    }
+
+    $ctx = [
+        'teacher_id' => $teacher_id,
+        'student_id' => $student_id,
+        'course_id' => $course_id,
+        'date' => $date,
+        'time' => $time,
+        'repeat' => $repeat,
+        'duration' => $duration,
+    ];
+    $new_id = e360_create_booking_from_context($student_id, $ctx, [
+        'require_credit' => false,
+        'force_new' => true,
+    ]);
+    if (!$new_id) {
+        wp_send_json_error(['message'=>'Could not create booking (slot conflict or invalid data)'], 409);
+    }
+    wp_send_json_success(['booking_id' => (int)$new_id]);
+});
+
+function e360_student_course_booking_ids(int $student_id, int $course_id): array {
+    if ($student_id <= 0 || $course_id <= 0) return [];
+    return get_posts([
+        'post_type' => 'e360_booking',
+        'post_status' => ['publish', 'pending'],
+        'numberposts' => 50,
+        'fields' => 'ids',
+        'orderby' => 'ID',
+        'order' => 'DESC',
+        'meta_query' => [
+            ['key' => 'course_id', 'value' => $course_id, 'compare' => '=', 'type' => 'NUMERIC'],
+            ['key' => 'student_id', 'value' => $student_id, 'compare' => '=', 'type' => 'NUMERIC'],
+        ],
+    ]);
+}
+
+function e360_booking_occurrences_utc_for_range(int $booking_id, int $from_utc, int $to_utc): array {
+    if ($booking_id <= 0 || $to_utc <= $from_utc) return [];
+
+    $repeat = (string) get_post_meta($booking_id, 'repeat', true);
+    if ($repeat === 'once') {
+        $ts = (int) get_post_meta($booking_id, 'start_ts_utc', true);
+        if ($ts >= $from_utc && $ts <= $to_utc) return [$ts];
+        return [];
+    }
+
+    $next = e360_booking_next_occurrence_ts($booking_id);
+    if ($next <= 0) return [];
+
+    $out = [];
+    $teacher_id = (int) get_post_meta($booking_id, 'teacher_id', true);
+    $tz = new DateTimeZone(e360_get_teacher_timezone_string($teacher_id));
+    while ($next <= $to_utc) {
+        if ($next >= $from_utc) {
+            $ymd = (new DateTimeImmutable('@' . $next))->setTimezone($tz)->format('Y-m-d');
+            if (!e360_booking_has_skip_date($booking_id, $ymd)) $out[] = $next;
+        }
+        $next += 7 * DAY_IN_SECONDS;
+    }
+    return $out;
+}
+
+function e360_student_course_calendar_data(int $student_id, int $course_id, int $days = 30, string $tz_name = ''): array {
+    $ids = e360_student_course_booking_ids($student_id, $course_id);
+    if (!$ids) return ['days' => [], 'timezone' => $tz_name];
+
+    if ($tz_name === '') {
+        $teacher_id = (int) get_post_meta((int)$ids[0], 'teacher_id', true);
+        $tz_name = e360_get_teacher_timezone_string($teacher_id);
+    }
+    $tz = new DateTimeZone($tz_name ?: 'UTC');
+
+    $from_utc = current_time('timestamp', true);
+    $to_utc = $from_utc + (max(1, $days) * DAY_IN_SECONDS);
+    $map = [];
+
+    foreach ($ids as $bid) {
+        $ts_list = e360_booking_occurrences_utc_for_range((int)$bid, $from_utc, $to_utc);
+        foreach ($ts_list as $ts) {
+            $dt = (new DateTimeImmutable('@' . $ts))->setTimezone($tz);
+            $ymd = $dt->format('Y-m-d');
+            $hhmm = $dt->format('H:i');
+            if (!isset($map[$ymd])) $map[$ymd] = [];
+            if (!in_array($hhmm, $map[$ymd], true)) $map[$ymd][] = $hhmm;
+        }
+    }
+
+    foreach ($map as $k => $times) {
+        sort($times);
+        $map[$k] = $times;
+    }
+    ksort($map);
+
+    return ['days' => $map, 'timezone' => $tz_name];
+}
+
+function e360_student_next_occurrence_for_course(int $student_id, int $course_id): array {
+    $ids = e360_student_course_booking_ids($student_id, $course_id);
+    $best = ['booking_id' => 0, 'ts_utc' => 0];
+    foreach ($ids as $bid) {
+        $ts = e360_booking_next_occurrence_ts((int)$bid);
+        if ($ts <= 0) continue;
+        if ($best['ts_utc'] === 0 || $ts < $best['ts_utc']) {
+            $best = ['booking_id' => (int)$bid, 'ts_utc' => (int)$ts];
+        }
+    }
+    return $best;
+}
+
+add_action('wp_ajax_e360_get_teacher_available_dates', function(){
+    check_ajax_referer('e360_booking_nonce', 'nonce');
+
+    $teacher_id = isset($_POST['teacher_id']) ? (int) $_POST['teacher_id'] : 0;
+    $duration   = isset($_POST['duration']) ? (int) $_POST['duration'] : 60;
+    $days       = isset($_POST['days']) ? (int) $_POST['days'] : 45;
+
+    if ($teacher_id <= 0) {
+        wp_send_json_error(['message' => 'teacher_id required'], 400);
+    }
+    if ($duration <= 0) $duration = 60;
+    $days = max(7, min(90, $days));
+
+    $tz_name = e360_get_teacher_timezone_string($teacher_id);
+    $tz = new DateTimeZone($tz_name);
+    $today = new DateTimeImmutable('today', $tz);
+    $result = [];
+
+    for ($i = 0; $i < $days; $i++) {
+        $date = $today->modify('+' . $i . ' day')->format('Y-m-d');
+        $slots = e360_generate_slots_for_teacher_date($teacher_id, $date, $duration);
+        if (!$slots) continue;
+        $result[] = [
+            'date' => $date,
+            'slots' => array_values($slots),
+        ];
+    }
+
+    wp_send_json_success([
+        'timezone' => $tz_name,
+        'days' => $result,
+    ]);
+});
+
+function e360_send_reschedule_request_email_to_teacher(int $booking_id, int $student_id, string $proposed_date, string $proposed_time, string $reason): void {
+    if (!function_exists('wp_mail')) return;
+
+    $teacher_id = (int) get_post_meta($booking_id, 'teacher_id', true);
+    if ($teacher_id <= 0) return;
+    $teacher = get_user_by('id', $teacher_id);
+
+    $course_id = (int) get_post_meta($booking_id, 'course_id', true);
+    $course_title = $course_id ? get_the_title($course_id) : ('Course #' . $course_id);
+    $student_label = e360_user_public_label_simple($student_id);
+    $tz_name = e360_get_teacher_timezone_string($teacher_id);
+    $site = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
+    $subject = '[' . $site . '] Reschedule request from student: ' . $student_label;
+
+    $body = "Student: {$student_label} (ID {$student_id})\n";
+    $body .= "Course: {$course_title} (#{$course_id})\n";
+    $body .= "Requested new time: {$proposed_date} {$proposed_time} ({$tz_name})\n";
+    if ($reason !== '') $body .= "Reason: {$reason}\n";
+    $body .= "\nPlease review and reschedule from your course schedule tools.";
+
+    $recipients = [];
+    if ($teacher && !empty($teacher->user_email)) {
+        $teacher_email = sanitize_email((string)$teacher->user_email);
+        if ($teacher_email !== '') $recipients[] = $teacher_email;
+    }
+
+    $default_admin = sanitize_email((string)get_option('admin_email'));
+    if ($default_admin !== '') $recipients[] = $default_admin;
+    $admins = get_users(['role' => 'administrator', 'fields' => ['user_email']]);
+    foreach ((array)$admins as $a) {
+        $mail = sanitize_email((string)($a->user_email ?? ''));
+        if ($mail !== '') $recipients[] = $mail;
+    }
+
+    $recipients = array_values(array_unique($recipients));
+    if (!$recipients) return;
+
+    wp_mail($recipients, $subject, $body, ['Content-Type: text/plain; charset=UTF-8']);
+}
+
+add_action('wp_ajax_e360_student_request_reschedule', function(){
+    if (!is_user_logged_in()) wp_send_json_error(['message' => 'Not logged in'], 401);
+    check_ajax_referer('e360_student_reschedule_request', 'nonce');
+
+    $uid = get_current_user_id();
+    if (current_user_can('tutor_instructor') && !current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Only students can send requests'], 403);
+    }
+
+    $booking_id = isset($_POST['booking_id']) ? (int)$_POST['booking_id'] : 0;
+    $date = isset($_POST['date']) ? sanitize_text_field(wp_unslash($_POST['date'])) : '';
+    $time = isset($_POST['time']) ? sanitize_text_field(wp_unslash($_POST['time'])) : '';
+    $reason = isset($_POST['reason']) ? sanitize_textarea_field(wp_unslash($_POST['reason'])) : '';
+    if ($reason === '') {
+        wp_send_json_error(['message' => 'Reason is required'], 400);
+    }
+
+    if ($booking_id <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !preg_match('/^\d{2}:\d{2}$/', $time)) {
+        wp_send_json_error(['message' => 'Invalid request data'], 400);
+    }
+
+    $student_id = (int) get_post_meta($booking_id, 'student_id', true);
+    if (!current_user_can('manage_options') && $student_id !== (int)$uid) {
+        wp_send_json_error(['message' => 'Not your booking'], 403);
+    }
+
+    $next_ts = e360_booking_next_occurrence_ts($booking_id);
+    if ($next_ts <= 0) wp_send_json_error(['message' => 'No upcoming lesson found'], 400);
+    if (($next_ts - current_time('timestamp', true)) < DAY_IN_SECONDS) {
+        wp_send_json_error(['message' => 'You can request reschedule only earlier than 24 hours before the next lesson.'], 400);
+    }
+
+    $teacher_id = (int) get_post_meta($booking_id, 'teacher_id', true);
+    $tz = new DateTimeZone(e360_get_teacher_timezone_string($teacher_id));
+    $dt = DateTimeImmutable::createFromFormat('Y-m-d H:i', $date . ' ' . $time, $tz);
+    if (!$dt) wp_send_json_error(['message' => 'Invalid date/time'], 400);
+    $duration = (int) get_post_meta($booking_id, 'duration_min', true);
+    if ($duration <= 0) $duration = 60;
+    $available_slots = e360_generate_slots_for_teacher_date($teacher_id, $date, $duration);
+    if (!in_array($time, $available_slots, true)) {
+        wp_send_json_error(['message' => 'Selected time is no longer available'], 409);
+    }
+
+    $requests = get_post_meta($booking_id, 'e360_reschedule_requests', true);
+    if (!is_array($requests)) $requests = [];
+    $requests[] = [
+        'student_id' => (int)$uid,
+        'proposed_date' => $date,
+        'proposed_time' => $time,
+        'reason' => $reason,
+        'status' => 'pending',
+        'created_at' => current_time('mysql'),
+        'next_lesson_ts_utc' => $next_ts,
+    ];
+    update_post_meta($booking_id, 'e360_reschedule_requests', $requests);
+
+    e360_send_reschedule_request_email_to_teacher($booking_id, (int)$uid, $date, $time, $reason);
+    wp_send_json_success(['ok' => 1]);
 });
 
 
@@ -1124,6 +1735,205 @@ function e360_get_teacher_bookings(int $teacher_id, int $course_id = 0, int $lim
     return $filtered;
 }
 
+function e360_course_enrolled_student_options(int $course_id): array {
+    if ($course_id <= 0) return [];
+    if (!function_exists('e360_get_course_enrolled_student_ids')) return [];
+    $ids = e360_get_course_enrolled_student_ids($course_id, 500);
+    if (!is_array($ids) || !$ids) return [];
+
+    $out = [];
+    foreach ($ids as $sid) {
+        $sid = (int)$sid;
+        if ($sid <= 0) continue;
+        if (function_exists('e360_is_student_enrolled_in_course') && !e360_is_student_enrolled_in_course($sid, $course_id)) {
+            continue;
+        }
+        $out[] = [
+            'id' => $sid,
+            'label' => e360_user_public_label_simple($sid),
+        ];
+    }
+
+    usort($out, function($a, $b){
+        return strcmp((string)$a['label'], (string)$b['label']);
+    });
+    return $out;
+}
+
+function e360_get_booking_reschedule_requests(int $booking_id, bool $only_pending = false): array {
+    $rows = get_post_meta($booking_id, 'e360_reschedule_requests', true);
+    if (!is_array($rows)) return [];
+    $out = [];
+    foreach ($rows as $idx => $r) {
+        if (!is_array($r)) continue;
+        $status = sanitize_key((string)($r['status'] ?? 'pending'));
+        if (!in_array($status, ['pending', 'approved', 'rejected'], true)) $status = 'pending';
+        if ($only_pending && $status !== 'pending') continue;
+        $out[] = [
+            'idx' => (int)$idx,
+            'status' => $status,
+            'student_id' => (int)($r['student_id'] ?? 0),
+            'proposed_date' => (string)($r['proposed_date'] ?? ''),
+            'proposed_time' => (string)($r['proposed_time'] ?? ''),
+            'reason' => (string)($r['reason'] ?? ''),
+            'created_at' => (string)($r['created_at'] ?? ''),
+        ];
+    }
+    return $out;
+}
+
+function e360_mark_matching_reschedule_request_status(
+    int $booking_id,
+    string $date,
+    string $time,
+    string $status = 'approved',
+    int $actor_user_id = 0
+): void {
+    if ($booking_id <= 0) return;
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) return;
+    if (!preg_match('/^\d{2}:\d{2}$/', $time)) return;
+    if (!in_array($status, ['approved', 'rejected', 'pending'], true)) $status = 'approved';
+
+    $rows = get_post_meta($booking_id, 'e360_reschedule_requests', true);
+    if (!is_array($rows) || !$rows) return;
+
+    for ($i = count($rows) - 1; $i >= 0; $i--) {
+        if (!isset($rows[$i]) || !is_array($rows[$i])) continue;
+        $r = $rows[$i];
+        $r_status = sanitize_key((string)($r['status'] ?? 'pending'));
+        $r_date = (string)($r['proposed_date'] ?? '');
+        $r_time = (string)($r['proposed_time'] ?? '');
+        if ($r_status !== 'pending') continue;
+        if ($r_date !== $date || $r_time !== $time) continue;
+
+        $rows[$i]['status'] = $status;
+        $rows[$i]['updated_at'] = current_time('mysql');
+        if ($actor_user_id > 0) $rows[$i]['updated_by'] = (int)$actor_user_id;
+        update_post_meta($booking_id, 'e360_reschedule_requests', $rows);
+        return;
+    }
+}
+
+function e360_teacher_course_calendar_data(int $teacher_id, int $course_id, int $days = 30): array {
+    $bookings = e360_get_teacher_bookings($teacher_id, $course_id, 300);
+    if (!$bookings) return ['days' => [], 'timezone' => e360_get_teacher_timezone_string($teacher_id)];
+
+    $tz_name = e360_get_teacher_timezone_string($teacher_id);
+    $tz = new DateTimeZone($tz_name);
+    $from_utc = current_time('timestamp', true);
+    $to_utc = $from_utc + (max(1, $days) * DAY_IN_SECONDS);
+    $map = [];
+
+    foreach ($bookings as $bid) {
+        $sid = (int) get_post_meta((int)$bid, 'student_id', true);
+        $student_label = e360_user_public_label_simple($sid);
+        $ts_list = e360_booking_occurrences_utc_for_range((int)$bid, $from_utc, $to_utc);
+        foreach ($ts_list as $ts) {
+            $dt = (new DateTimeImmutable('@' . $ts))->setTimezone($tz);
+            $ymd = $dt->format('Y-m-d');
+            $hhmm = $dt->format('H:i');
+            if (!isset($map[$ymd])) $map[$ymd] = [];
+            $map[$ymd][] = [
+                'time' => $hhmm,
+                'student' => $student_label,
+                'student_id' => $sid,
+                'booking_id' => (int)$bid,
+            ];
+        }
+    }
+
+    foreach ($map as $k => $rows) {
+        usort($rows, function($a, $b){
+            return strcmp((string)($a['time'] ?? ''), (string)($b['time'] ?? ''));
+        });
+        $map[$k] = $rows;
+    }
+    ksort($map);
+
+    return ['days' => $map, 'timezone' => $tz_name];
+}
+
+function e360_render_teacher_course_calendar_html(int $teacher_id, int $course_id, int $days = 30): string {
+    $calendar = e360_teacher_course_calendar_data($teacher_id, $course_id, $days);
+    $days_map = (array)($calendar['days'] ?? []);
+    $tz_name = (string)($calendar['timezone'] ?? '');
+    $tz = new DateTimeZone($tz_name ?: 'UTC');
+    $today = new DateTimeImmutable('now', $tz);
+
+    $out = '<div style="margin:10px 0 14px;">';
+    $out .= '<div style="font-weight:600;margin-bottom:8px;">Booked calendar (next ' . (int)$days . ' days)</div>';
+    $out .= '<div style="opacity:.75;font-size:12px;margin-bottom:8px;">Timezone: ' . esc_html($tz_name) . '</div>';
+    $out .= '<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;">';
+    for ($i = 0; $i < $days; $i++) {
+        $d = $today->modify('+' . $i . ' day');
+        $ymd = $d->format('Y-m-d');
+        $rows = isset($days_map[$ymd]) && is_array($days_map[$ymd]) ? $days_map[$ymd] : [];
+        $title = $d->format('D, M j');
+        if (!$rows) {
+            $out .= '<div style="border:1px solid #efefef;border-radius:8px;padding:8px;min-height:74px;opacity:.7;">';
+            $out .= '<div style="font-size:12px;">' . esc_html($title) . '</div>';
+            $out .= '</div>';
+            continue;
+        }
+        $out .= '<div style="border:1px solid #d9e3f8;background:#f8fbff;border-radius:8px;padding:8px;min-height:74px;">';
+        $out .= '<div style="font-size:12px;font-weight:600;margin-bottom:4px;">' . esc_html($title) . '</div>';
+        foreach ($rows as $r) {
+            $out .= '<div style="font-size:12px;line-height:1.35;margin-bottom:4px;">';
+            $out .= '<strong>' . esc_html((string)($r['time'] ?? '')) . '</strong><br>';
+            $out .= '<span style="opacity:.85;">' . esc_html((string)($r['student'] ?? '')) . '</span>';
+            $out .= '</div>';
+        }
+        $out .= '</div>';
+    }
+    $out .= '</div></div>';
+    return $out;
+}
+
+function e360_render_teacher_pending_reschedule_requests(int $teacher_id, int $course_id): string {
+    $bookings = e360_get_teacher_bookings($teacher_id, $course_id, 300);
+    if (!$bookings) return '';
+
+    $rows = [];
+    foreach ($bookings as $bid) {
+        $reqs = e360_get_booking_reschedule_requests((int)$bid, true);
+        if (!$reqs) continue;
+        $sid = (int)get_post_meta((int)$bid, 'student_id', true);
+        $student_label = e360_user_public_label_simple($sid);
+        foreach ($reqs as $r) {
+            $rows[] = [
+                'booking_id' => (int)$bid,
+                'student' => $student_label,
+                'proposed_date' => (string)$r['proposed_date'],
+                'proposed_time' => (string)$r['proposed_time'],
+                'reason' => (string)$r['reason'],
+                'created_at' => (string)$r['created_at'],
+            ];
+        }
+    }
+    if (!$rows) return '';
+    usort($rows, function($a, $b){
+        return strcmp((string)$b['created_at'], (string)$a['created_at']);
+    });
+
+    $out = '<div style="margin:10px 0 14px;">';
+    $out .= '<div style="font-weight:600;margin-bottom:8px;">Pending reschedule requests</div>';
+    $out .= '<div style="display:flex;flex-direction:column;gap:8px;">';
+    foreach ($rows as $r) {
+        $out .= '<div style="border:1px solid #ececec;border-radius:8px;padding:8px;">';
+        $out .= '<div style="font-weight:600;">' . esc_html($r['student']) . '</div>';
+        $out .= '<div style="font-size:13px;opacity:.9;">Requested: ' . esc_html($r['proposed_date'] . ' ' . $r['proposed_time']) . '</div>';
+        if ($r['reason'] !== '') {
+            $out .= '<div style="font-size:13px;opacity:.9;">Reason: ' . esc_html($r['reason']) . '</div>';
+        }
+        if ($r['created_at'] !== '') {
+            $out .= '<div style="font-size:12px;opacity:.7;">Requested at: ' . esc_html($r['created_at']) . '</div>';
+        }
+        $out .= '</div>';
+    }
+    $out .= '</div></div>';
+    return $out;
+}
+
 function e360_render_teacher_bookings_box(array $booking_ids, array $args = []): string {
     if (!$booking_ids) return '';
 
@@ -1135,6 +1945,9 @@ function e360_render_teacher_bookings_box(array $booking_ids, array $args = []):
         'button_class' => 'tutor-btn tutor-btn-outline-primary tutor-btn-sm',
         'container_style' => 'margin-top:14px;',
         'can_edit' => true,
+        'allow_add' => false,
+        'course_id' => 0,
+        'teacher_id' => 0,
     ]);
 
     $box_id = preg_replace('/[^a-zA-Z0-9\-_]/', '', (string)$args['box_id']);
@@ -1146,18 +1959,29 @@ function e360_render_teacher_bookings_box(array $booking_ids, array $args = []):
     $show_course = !empty($args['show_course']);
     $show_teacher = !empty($args['show_teacher']);
     $can_edit = !empty($args['can_edit']);
+    $allow_add = !empty($args['allow_add']);
+    $add_course_id = (int)$args['course_id'];
+    $add_teacher_id = (int)$args['teacher_id'];
     $button_class = (string)$args['button_class'];
     $container_style = (string)$args['container_style'];
+    $student_opts = ($allow_add && $add_course_id > 0) ? e360_course_enrolled_student_options($add_course_id) : [];
 
     $out  = '<div id="' . esc_attr($box_id) . '" class="tutor-course-progress-wrapper tutor-mb-32" style="' . esc_attr($container_style) . '"';
     $out .= ' data-ajax="' . esc_attr($ajax) . '" data-nonce="' . esc_attr($nonce) . '" data-slots-nonce="' . esc_attr($slots_nonce) . '">';
-    $out .= '<h3 class="tutor-color-black tutor-fs-5 tutor-fw-bold tutor-mb-16">' . esc_html((string)$args['title']) . '</h3>';
+    $out .= '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">';
+    $out .= '<h3 class="tutor-color-black tutor-fs-5 tutor-fw-bold tutor-mb-16" style="margin:0;">' . esc_html((string)$args['title']) . '</h3>';
+    if ($can_edit && $allow_add && $add_course_id > 0 && $add_teacher_id > 0) {
+        $out .= '<button type="button" class="tutor-btn tutor-btn-primary tutor-btn-sm e360-open-add-booking">Add lesson</button>';
+    }
+    $out .= '</div>';
     $out .= '<div style="display:flex;flex-direction:column;gap:10px;">';
 
     foreach ($booking_ids as $bid) {
         $bid = (int)$bid;
         $student_id = (int) get_post_meta($bid, 'student_id', true);
         $teacher_id = (int) get_post_meta($bid, 'teacher_id', true);
+        $duration_min = (int) get_post_meta($bid, 'duration_min', true);
+        if ($duration_min <= 0) $duration_min = 60;
         $course_id = (int) get_post_meta($bid, 'course_id', true);
         $label = e360_next_occurrence_label($bid);
         $student_label = e360_user_public_label_simple($student_id);
@@ -1180,7 +2004,8 @@ function e360_render_teacher_bookings_box(array $booking_ids, array $args = []):
 
         if ($can_edit) {
             $out .= '<div style="text-align:right;">';
-            $out .= '<button type="button" class="' . esc_attr($button_class) . ' e360-open-reschedule" data-booking-id="' . (int)$bid . '" data-teacher-id="' . (int)$teacher_id . '">Reschedule</button>';
+            $out .= '<button type="button" class="' . esc_attr($button_class) . ' e360-open-reschedule" data-booking-id="' . (int)$bid . '" data-teacher-id="' . (int)$teacher_id . '" data-duration="' . (int)$duration_min . '">Reschedule</button>';
+            $out .= ' <button type="button" class="tutor-btn tutor-btn-outline-danger tutor-btn-sm e360-delete-booking" data-booking-id="' . (int)$bid . '">Delete</button>';
             $out .= '</div>';
         }
 
@@ -1207,6 +2032,7 @@ function e360_render_teacher_bookings_box(array $booking_ids, array $args = []):
         <div style="margin-top:10px;">
             <label style="display:block;font-weight:600;margin-bottom:6px;">Date</label>
             <input type="date" class="e360-reschedule-date tutor-form-control" />
+            <div class="e360-teacher-available" style="margin-top:8px;font-size:12px;opacity:.85;"></div>
         </div>
 
         <div style="margin-top:10px;">
@@ -1219,6 +2045,51 @@ function e360_render_teacher_bookings_box(array $booking_ids, array $args = []):
         <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
             <button type="button" class="e360-save-reschedule tutor-btn tutor-btn-primary">Save</button>
             <span class="e360-reschedule-msg" style="opacity:.8;"></span>
+        </div>
+      </div>
+    </div>';
+    }
+
+    if ($can_edit && $allow_add && $add_course_id > 0 && $add_teacher_id > 0) {
+        $out .= '
+    <div class="e360-add-booking-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;padding:20px;">
+      <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:12px;padding:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:700;">Add lesson</div>
+            <button type="button" class="e360-close-add tutor-iconic-btn"><span class="tutor-icon-times"></span></button>
+        </div>
+        <div style="margin-top:10px;">
+            <label style="display:block;font-weight:600;margin-bottom:6px;">Student</label>
+            <select class="e360-add-student tutor-form-select">';
+        if (!$student_opts) {
+            $out .= '<option value="">No enrolled students</option>';
+        } else {
+            $out .= '<option value="">Select student…</option>';
+            foreach ($student_opts as $s) {
+                $out .= '<option value="' . (int)$s['id'] . '">' . esc_html((string)$s['label']) . '</option>';
+            }
+        }
+        $out .= '</select>
+        </div>
+        <div style="margin-top:10px;">
+            <label style="display:block;font-weight:600;margin-bottom:6px;">Type</label>
+            <select class="e360-add-repeat tutor-form-select">
+                <option value="weekly">Weekly</option>
+                <option value="once">One-time</option>
+            </select>
+        </div>
+        <div style="margin-top:10px;">
+            <label style="display:block;font-weight:600;margin-bottom:6px;">Date</label>
+            <input type="date" class="e360-add-date tutor-form-control" />
+            <div class="e360-add-available" style="margin-top:8px;font-size:12px;opacity:.85;"></div>
+        </div>
+        <div style="margin-top:10px;">
+            <label style="display:block;font-weight:600;margin-bottom:6px;">Time</label>
+            <select class="e360-add-time tutor-form-select"><option value="">Select date first…</option></select>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+            <button type="button" class="tutor-btn tutor-btn-primary e360-save-add-booking">Add</button>
+            <span class="e360-add-booking-msg" style="opacity:.8;"></span>
         </div>
       </div>
     </div>';
@@ -1240,21 +2111,128 @@ function e360_render_teacher_bookings_box(array $booking_ids, array $args = []):
         var saveBtn = box.querySelector(".e360-save-reschedule");
         var msgEl = box.querySelector(".e360-reschedule-msg");
         var closeBtn = box.querySelector(".e360-close-modal");
+        var availableEl = box.querySelector(".e360-teacher-available");
+        var addModal = box.querySelector(".e360-add-booking-modal");
+        var addOpenBtn = box.querySelector(".e360-open-add-booking");
+        var addCloseBtn = box.querySelector(".e360-close-add");
+        var addStudentEl = box.querySelector(".e360-add-student");
+        var addRepeatEl = box.querySelector(".e360-add-repeat");
+        var addDateEl = box.querySelector(".e360-add-date");
+        var addTimeEl = box.querySelector(".e360-add-time");
+        var addAvailableEl = box.querySelector(".e360-add-available");
+        var addSaveBtn = box.querySelector(".e360-save-add-booking");
+        var addMsgEl = box.querySelector(".e360-add-booking-msg");
+        var addCourseId = ' . (int)$add_course_id . ';
+        var addTeacherId = ' . (int)$add_teacher_id . ';
+        var addDuration = 60;
+        var addAvailableMap = {};
+        var addAvailableLoaded = false;
 
         var currentBookingId = 0;
         var currentTeacherId = 0;
+        var currentDuration = 60;
+        var availableMap = {};
+        var availableLoadedKey = "";
 
         function setMsg(t){ msgEl.textContent = t || ""; }
-        function openModal(bookingId, teacherId){
+        function setAddMsg(t){ if (addMsgEl) addMsgEl.textContent = t || ""; }
+        function syncTutorSelectUi(selectEl){
+            if (!selectEl) return;
+            var wrap = selectEl.parentElement ? selectEl.parentElement.querySelector(".tutor-js-form-select") : null;
+            if (!wrap) return;
+            var labelEl = wrap.querySelector("[tutor-dropdown-label]");
+            var optsWrap = wrap.querySelector(".tutor-form-select-options");
+            if (!labelEl || !optsWrap) return;
+
+            var selectedText = "";
+            if (selectEl.selectedIndex >= 0 && selectEl.options[selectEl.selectedIndex]) {
+                selectedText = selectEl.options[selectEl.selectedIndex].textContent || "";
+            }
+            if (!selectedText && selectEl.options.length) {
+                selectedText = selectEl.options[0].textContent || "";
+            }
+            labelEl.textContent = selectedText || "Select…";
+
+            optsWrap.innerHTML = "";
+            Array.prototype.forEach.call(selectEl.options, function(opt, idx){
+                var item = document.createElement("div");
+                item.className = "tutor-form-select-option" + ((opt.selected || (idx === 0 && !selectEl.value)) ? " is-active" : "");
+                var span = document.createElement("span");
+                span.setAttribute("tutor-dropdown-item", "");
+                span.setAttribute("data-key", opt.value || "");
+                span.className = "tutor-nowrap-ellipsis";
+                span.title = opt.textContent || "";
+                span.textContent = opt.textContent || "";
+                item.appendChild(span);
+                item.addEventListener("click", function(){
+                    selectEl.value = opt.value || "";
+                    labelEl.textContent = opt.textContent || "";
+                    var ev = new Event("change", { bubbles: true });
+                    selectEl.dispatchEvent(ev);
+                    var active = optsWrap.querySelectorAll(".tutor-form-select-option");
+                    active.forEach(function(a){ a.classList.remove("is-active"); });
+                    item.classList.add("is-active");
+                });
+                optsWrap.appendChild(item);
+            });
+        }
+        function setTimeOptions(slots){
+            var list = Array.isArray(slots) ? slots : [];
+            if (!list.length){
+                timeEl.innerHTML = "<option value=\\"\\">No available slots</option>";
+                syncTutorSelectUi(timeEl);
+                return;
+            }
+            timeEl.innerHTML = "<option value=\\"\\">Select…</option>";
+            list.forEach(function(s){
+                var opt = document.createElement("option");
+                opt.value = s;
+                opt.textContent = (s || "").substring(0,5);
+                timeEl.appendChild(opt);
+            });
+            syncTutorSelectUi(timeEl);
+        }
+        function renderAvailableDates(tzName){
+            if (!availableEl) return;
+            var dates = Object.keys(availableMap);
+            if (!dates.length){
+                availableEl.textContent = "No free dates in the next period.";
+                return;
+            }
+            var html = "<div style=\\"margin-bottom:6px;\\">Available dates (timezone: <strong>" + (tzName || "") + "</strong>)</div>";
+            html += "<div style=\\"display:flex;flex-wrap:wrap;gap:6px;\\">";
+            dates.slice(0, 12).forEach(function(d){
+                html += "<button type=\\"button\\" class=\\"button button-small e360-teacher-pick-date\\" data-date=\\"" + d + "\\">" + d + "</button>";
+            });
+            html += "</div>";
+            availableEl.innerHTML = html;
+            availableEl.querySelectorAll(".e360-teacher-pick-date").forEach(function(btn){
+                btn.addEventListener("click", function(){
+                    var d = btn.getAttribute("data-date") || "";
+                    if (!d) return;
+                    dateEl.value = d;
+                    dateEl.dispatchEvent(new Event("change"));
+                });
+            });
+        }
+        function openModal(bookingId, teacherId, duration){
             currentBookingId = parseInt(bookingId,10) || 0;
             currentTeacherId = parseInt(teacherId,10) || 0;
+            currentDuration = parseInt(duration,10) || 60;
+            availableMap = {};
+            availableLoadedKey = "";
+            dateEl.value = "";
+            setTimeOptions([]);
+            if (availableEl) availableEl.textContent = "";
             setMsg("");
             modal.style.display = "block";
+            loadAvailableDates();
         }
         function closeModal(){
             modal.style.display = "none";
             currentBookingId = 0;
             currentTeacherId = 0;
+            currentDuration = 60;
         }
         function post(params){
             return fetch(box.getAttribute("data-ajax"), {
@@ -1268,7 +2246,27 @@ function e360_render_teacher_bookings_box(array $booking_ids, array $args = []):
         box.addEventListener("click", function(e){
             var btn = e.target.closest(".e360-open-reschedule");
             if (btn){
-                openModal(btn.getAttribute("data-booking-id"), btn.getAttribute("data-teacher-id"));
+                openModal(btn.getAttribute("data-booking-id"), btn.getAttribute("data-teacher-id"), btn.getAttribute("data-duration"));
+                return;
+            }
+            var delBtn = e.target.closest(".e360-delete-booking");
+            if (delBtn) {
+                var bid = parseInt(delBtn.getAttribute("data-booking-id"), 10) || 0;
+                if (!bid) return;
+                if (!window.confirm("Delete this lesson slot?")) return;
+                setMsg("Deleting…");
+                post({
+                    action: "e360_teacher_delete_booking",
+                    nonce: box.getAttribute("data-nonce"),
+                    booking_id: bid
+                }).then(function(resp){
+                    if (!resp || !resp.success){
+                        var m = resp && resp.data && resp.data.message ? resp.data.message : "Error";
+                        setMsg(m);
+                        return;
+                    }
+                    window.location.reload();
+                });
             }
         });
 
@@ -1277,35 +2275,66 @@ function e360_render_teacher_bookings_box(array $booking_ids, array $args = []):
             if (e.target === modal) closeModal();
         });
 
-        dateEl.addEventListener("change", function(){
-            var date = this.value || "";
-            timeEl.innerHTML = "<option value=\\"\\">Loading…</option>";
-            if (!date || !currentTeacherId) return;
-
+        function loadSlotsForDate(date){
+            if (!date || !currentTeacherId) { setTimeOptions([]); return; }
+            setTimeOptions([]);
+            setMsg("Loading available time…");
             post({
                 action: "e360_get_slots",
                 nonce: box.getAttribute("data-slots-nonce") || "",
                 teacher_id: currentTeacherId,
                 date: date,
-                duration: 60
+                duration: currentDuration
             }).then(function(resp){
                 if (!resp || !resp.success){
-                    timeEl.innerHTML = "<option value=\\"\\">Error</option>";
+                    setTimeOptions([]);
+                    setMsg("Failed to load available time.");
                     return;
                 }
                 var slots = (resp.data && resp.data.slots) ? resp.data.slots : [];
-                if (!slots.length){
-                    timeEl.innerHTML = "<option value=\\"\\">No available slots</option>";
+                setTimeOptions(slots);
+                if (slots.length) setMsg("");
+                else setMsg("No free time for this date.");
+            });
+        }
+        function loadAvailableDates(){
+            var key = String(currentTeacherId) + "|" + String(currentDuration);
+            if (availableLoadedKey === key) return;
+            availableLoadedKey = key;
+            setMsg("Loading available dates…");
+            post({
+                action: "e360_get_teacher_available_dates",
+                nonce: box.getAttribute("data-slots-nonce") || "",
+                teacher_id: currentTeacherId,
+                duration: currentDuration,
+                days: 45
+            }).then(function(resp){
+                if (!resp || !resp.success){
+                    availableMap = {};
+                    if (availableEl) availableEl.textContent = "Failed to load available dates.";
+                    setMsg("");
                     return;
                 }
-                timeEl.innerHTML = "<option value=\\"\\">Select…</option>";
-                slots.forEach(function(s){
-                    var opt = document.createElement("option");
-                    opt.value = s;
-                    opt.textContent = (s || "").substring(0,5);
-                    timeEl.appendChild(opt);
+                availableMap = {};
+                var items = (resp.data && resp.data.days) ? resp.data.days : [];
+                items.forEach(function(it){
+                    if (!it || !it.date) return;
+                    availableMap[it.date] = true;
                 });
+                var keys = Object.keys(availableMap).sort();
+                if (keys.length) dateEl.min = keys[0];
+                renderAvailableDates((resp.data && resp.data.timezone) ? resp.data.timezone : "");
+                setMsg("");
+            }).catch(function(){
+                if (availableEl) availableEl.textContent = "Failed to load available dates.";
+                setMsg("");
             });
+        }
+
+        dateEl.addEventListener("change", function(){
+            var date = this.value || "";
+            if (!date) { setTimeOptions([]); return; }
+            loadSlotsForDate(date);
         });
 
         saveBtn.addEventListener("click", function(){
@@ -1335,6 +2364,154 @@ function e360_render_teacher_bookings_box(array $booking_ids, array $args = []):
                 window.location.reload();
             });
         });
+
+        function setAddTimeOptions(slots){
+            if (!addTimeEl) return;
+            var list = Array.isArray(slots) ? slots : [];
+            if (!list.length){
+                addTimeEl.innerHTML = "<option value=\\"\\">No available slots</option>";
+                syncTutorSelectUi(addTimeEl);
+                return;
+            }
+            addTimeEl.innerHTML = "<option value=\\"\\">Select…</option>";
+            list.forEach(function(s){
+                var opt = document.createElement("option");
+                opt.value = s;
+                opt.textContent = (s || "").substring(0,5);
+                addTimeEl.appendChild(opt);
+            });
+            syncTutorSelectUi(addTimeEl);
+        }
+        function renderAddAvailableDates(tzName){
+            if (!addAvailableEl) return;
+            var dates = Object.keys(addAvailableMap);
+            if (!dates.length){
+                addAvailableEl.textContent = "No free dates in the next period.";
+                return;
+            }
+            var html = "<div style=\\"margin-bottom:6px;\\">Available dates (timezone: <strong>" + (tzName || "") + "</strong>)</div>";
+            html += "<div style=\\"display:flex;flex-wrap:wrap;gap:6px;\\">";
+            dates.slice(0, 12).forEach(function(d){
+                html += "<button type=\\"button\\" class=\\"button button-small e360-add-pick-date\\" data-date=\\"" + d + "\\">" + d + "</button>";
+            });
+            html += "</div>";
+            addAvailableEl.innerHTML = html;
+            addAvailableEl.querySelectorAll(".e360-add-pick-date").forEach(function(btn){
+                btn.addEventListener("click", function(){
+                    var d = btn.getAttribute("data-date") || "";
+                    if (!d || !addDateEl) return;
+                    addDateEl.value = d;
+                    addDateEl.dispatchEvent(new Event("change"));
+                });
+            });
+        }
+        function loadAddSlotsForDate(date){
+            if (!date || !addTeacherId) { setAddTimeOptions([]); return; }
+            setAddTimeOptions([]);
+            setAddMsg("Loading available time…");
+            post({
+                action: "e360_get_slots",
+                nonce: box.getAttribute("data-slots-nonce") || "",
+                teacher_id: addTeacherId,
+                date: date,
+                duration: addDuration
+            }).then(function(resp){
+                if (!resp || !resp.success){
+                    setAddTimeOptions([]);
+                    setAddMsg("Failed to load available time.");
+                    return;
+                }
+                var slots = (resp.data && resp.data.slots) ? resp.data.slots : [];
+                setAddTimeOptions(slots);
+                setAddMsg(slots.length ? "" : "No free time for this date.");
+            });
+        }
+        function loadAddAvailableDates(){
+            if (addAvailableLoaded) return;
+            addAvailableLoaded = true;
+            setAddMsg("Loading available dates…");
+            post({
+                action: "e360_get_teacher_available_dates",
+                nonce: box.getAttribute("data-slots-nonce") || "",
+                teacher_id: addTeacherId,
+                duration: addDuration,
+                days: 45
+            }).then(function(resp){
+                if (!resp || !resp.success){
+                    addAvailableMap = {};
+                    if (addAvailableEl) addAvailableEl.textContent = "Failed to load available dates.";
+                    setAddMsg("");
+                    return;
+                }
+                addAvailableMap = {};
+                var items = (resp.data && resp.data.days) ? resp.data.days : [];
+                items.forEach(function(it){
+                    if (!it || !it.date) return;
+                    addAvailableMap[it.date] = true;
+                });
+                var keys = Object.keys(addAvailableMap).sort();
+                if (keys.length && addDateEl) addDateEl.min = keys[0];
+                renderAddAvailableDates((resp.data && resp.data.timezone) ? resp.data.timezone : "");
+                setAddMsg("");
+            }).catch(function(){
+                if (addAvailableEl) addAvailableEl.textContent = "Failed to load available dates.";
+                setAddMsg("");
+            });
+        }
+
+        if (addOpenBtn && addModal) {
+            addOpenBtn.addEventListener("click", function(){
+                addModal.style.display = "block";
+                if (addDateEl) addDateEl.value = "";
+                setAddTimeOptions([]);
+                setAddMsg("");
+                loadAddAvailableDates();
+            });
+        }
+        if (addCloseBtn && addModal) {
+            addCloseBtn.addEventListener("click", function(){ addModal.style.display = "none"; });
+        }
+        if (addModal) {
+            addModal.addEventListener("click", function(e){ if (e.target === addModal) addModal.style.display = "none"; });
+        }
+        if (addDateEl) {
+            addDateEl.addEventListener("change", function(){
+                var date = this.value || "";
+                if (!date) { setAddTimeOptions([]); return; }
+                loadAddSlotsForDate(date);
+            });
+        }
+        if (addSaveBtn) {
+            addSaveBtn.addEventListener("click", function(){
+                var studentId = addStudentEl ? (addStudentEl.value || "") : "";
+                var repeat = addRepeatEl ? (addRepeatEl.value || "weekly") : "weekly";
+                var date = addDateEl ? (addDateEl.value || "") : "";
+                var time = addTimeEl ? (addTimeEl.value || "") : "";
+                if (!studentId || !date || !time){
+                    setAddMsg("Select student, date and time");
+                    return;
+                }
+                setAddMsg("Saving…");
+                post({
+                    action: "e360_teacher_add_booking",
+                    nonce: box.getAttribute("data-nonce"),
+                    teacher_id: addTeacherId,
+                    course_id: addCourseId,
+                    student_id: studentId,
+                    repeat: repeat,
+                    date: date,
+                    time: time,
+                    duration: addDuration
+                }).then(function(resp){
+                    if (!resp || !resp.success){
+                        var m = resp && resp.data && resp.data.message ? resp.data.message : "Error";
+                        setAddMsg(m);
+                        return;
+                    }
+                    window.location.reload();
+                });
+            });
+        }
     })();
     </script>';
     }
@@ -1347,29 +2524,313 @@ function e360_course_schedule_box_html(int $course_id, int $uid): string {
     $out = '';
 
     if (!$is_teacher) {
-        // student: find booking for this student+course
-        $posts = get_posts([
-            'post_type' => 'e360_booking',
-            'post_status' => ['publish','pending'],
-            'numberposts' => 1,
-            'fields' => 'ids',
-            'meta_query' => [
-                ['key'=>'course_id','value'=>$course_id,'compare'=>'=','type'=>'NUMERIC'],
-                ['key'=>'student_id','value'=>$uid,'compare'=>'=','type'=>'NUMERIC'],
-            ]
-        ]);
-
-        if (!$posts) return '';
-
-        $bid = (int)$posts[0];
+        if (function_exists('e360_is_student_enrolled_in_course') && !e360_is_student_enrolled_in_course($uid, $course_id)) {
+            return '';
+        }
+        $next = e360_student_next_occurrence_for_course($uid, $course_id);
+        if ((int)$next['booking_id'] <= 0) return '';
+        $bid = (int)$next['booking_id'];
         $label = e360_next_occurrence_label($bid);
+        $teacher_id = (int) get_post_meta($bid, 'teacher_id', true);
+        $tz_name = e360_get_teacher_timezone_string($teacher_id);
+        $calendar = e360_student_course_calendar_data($uid, $course_id, 30, $tz_name);
+        $days_map = (array)($calendar['days'] ?? []);
+        $req_nonce = wp_create_nonce('e360_student_reschedule_request');
+        $slots_nonce = wp_create_nonce('e360_booking_nonce');
+        $ajax = admin_url('admin-ajax.php');
+        $duration = (int) get_post_meta($bid, 'duration_min', true);
+        if ($duration <= 0) $duration = 60;
+        $box_id = 'e360-student-reschedule-box-' . $course_id . '-' . $uid . '-' . $bid;
+        $can_request = ((int)$next['ts_utc'] - current_time('timestamp', true)) >= DAY_IN_SECONDS;
 
         $out .= '<div class="tutor-course-progress-wrapper tutor-mb-32" style="margin-top:14px;">';
         $out .= '<h3 class="tutor-color-black tutor-fs-5 tutor-fw-bold tutor-mb-16">Your lesson schedule</h3>';
         $out .= '<div style="font-size:14px;">';
         $out .= '<div><strong>Next:</strong> ' . esc_html($label['when']) . '</div>';
-        $out .= '<div style="opacity:.75;">Timezone: ' . esc_html($label['tz']) . '</div>';
+        $out .= '</div>';
+
+        $out .= '<div class="e360-student-calendar-wrap" style="margin-top:10px;">';
+        $out .= '<div style="font-weight:600;margin-bottom:8px;">Booked lessons (next 30 days)</div>';
+        $out .= '<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;">';
+        $tz = new DateTimeZone($tz_name);
+        $today = new DateTimeImmutable('now', $tz);
+        for ($i = 0; $i < 30; $i++) {
+            $d = $today->modify('+' . $i . ' day');
+            $ymd = $d->format('Y-m-d');
+            $times = isset($days_map[$ymd]) && is_array($days_map[$ymd]) ? $days_map[$ymd] : [];
+            $title = $d->format('D, M j');
+            if (!$times) {
+                $out .= '<div style="border:1px solid #efefef;border-radius:8px;padding:8px;min-height:58px;opacity:.7;">';
+                $out .= '<div style="font-size:12px;">' . esc_html($title) . '</div>';
+                $out .= '</div>';
+            } else {
+                $out .= '<div style="border:1px solid #c9d7ff;background:#f6f9ff;border-radius:8px;padding:8px;min-height:58px;">';
+                $out .= '<div style="font-size:12px;font-weight:600;margin-bottom:4px;">' . esc_html($title) . '</div>';
+                $out .= '<div style="font-size:12px;line-height:1.35;">' . esc_html(implode(', ', $times)) . '</div>';
+                $out .= '</div>';
+            }
+        }
         $out .= '</div></div>';
+
+        $out .= '<div id="' . esc_attr($box_id) . '" style="margin-top:12px;" data-ajax="' . esc_attr($ajax) . '" data-req-nonce="' . esc_attr($req_nonce) . '" data-slots-nonce="' . esc_attr($slots_nonce) . '" data-booking-id="' . (int)$bid . '" data-teacher-id="' . (int)$teacher_id . '" data-duration="' . (int)$duration . '">';
+        if ($can_request) {
+            $out .= '<button type="button" class="tutor-btn tutor-btn-outline-primary tutor-btn-sm e360-open-student-reschedule">Request time change</button>';
+            $out .= '<div style="font-size:12px;opacity:.75;margin-top:4px;">Requests are allowed only earlier than 24 hours before next lesson.</div>';
+        } else {
+            $out .= '<div style="font-size:12px;opacity:.75;">Reschedule request is disabled: less than 24 hours before next lesson.</div>';
+        }
+        $out .= '<span class="e360-student-reschedule-msg" style="margin-left:8px;opacity:.8;"></span>';
+        $out .= '
+        <div class="e360-student-reschedule-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;padding:20px;">
+          <div style="max-width:520px;margin:40px auto;background:#fff;border-radius:12px;padding:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-weight:700;">Request lesson reschedule</div>
+                <button type="button" class="e360-student-close tutor-iconic-btn"><span class="tutor-icon-times"></span></button>
+            </div>
+            <div style="margin-top:10px;">
+                <label style="display:block;font-weight:600;margin-bottom:6px;">Date</label>
+                <input type="date" class="e360-student-date tutor-form-control" />
+                <div class="e360-student-available" style="margin-top:8px;font-size:12px;opacity:.85;"></div>
+            </div>
+            <div style="margin-top:10px;">
+                <label style="display:block;font-weight:600;margin-bottom:6px;">Time</label>
+                <select class="e360-student-time tutor-form-select"><option value="">Select available date first…</option></select>
+            </div>
+            <div style="margin-top:10px;">
+                <label style="display:block;font-weight:600;margin-bottom:6px;">Reason</label>
+                <textarea class="e360-student-reason tutor-form-control" rows="3" placeholder="Please provide reason"></textarea>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+                <button type="button" class="tutor-btn tutor-btn-primary e360-student-send">Send request</button>
+                <span class="e360-student-modal-msg" style="opacity:.8;"></span>
+            </div>
+          </div>
+        </div>';
+        $out .= '</div>';
+
+        $out .= '<script>
+        (function(){
+            var box = document.getElementById("' . esc_js($box_id) . '");
+            if (!box || box.getAttribute("data-bound")==="1") return;
+            box.setAttribute("data-bound","1");
+            var openBtn = box.querySelector(".e360-open-student-reschedule");
+            var modal = box.querySelector(".e360-student-reschedule-modal");
+            var closeBtn = box.querySelector(".e360-student-close");
+            var dateEl = box.querySelector(".e360-student-date");
+            var availableEl = box.querySelector(".e360-student-available");
+            var timeEl = box.querySelector(".e360-student-time");
+            var reasonEl = box.querySelector(".e360-student-reason");
+            var sendBtn = box.querySelector(".e360-student-send");
+            var msgEl = box.querySelector(".e360-student-reschedule-msg");
+            var modalMsg = box.querySelector(".e360-student-modal-msg");
+            var teacherId = parseInt(box.getAttribute("data-teacher-id"),10)||0;
+            var bookingId = parseInt(box.getAttribute("data-booking-id"),10)||0;
+            var duration = parseInt(box.getAttribute("data-duration"),10)||60;
+            var availableMap = {};
+            var availableLoaded = false;
+
+            function setMsg(t){ if(msgEl) msgEl.textContent = t||""; }
+            function setModalMsg(t){ if(modalMsg) modalMsg.textContent = t||""; }
+            function syncTutorSelectUi(selectEl){
+                if (!selectEl) return;
+                var wrap = selectEl.parentElement ? selectEl.parentElement.querySelector(".tutor-js-form-select") : null;
+                if (!wrap) return;
+                var labelEl = wrap.querySelector("[tutor-dropdown-label]");
+                var optsWrap = wrap.querySelector(".tutor-form-select-options");
+                if (!labelEl || !optsWrap) return;
+
+                var selectedText = "";
+                if (selectEl.selectedIndex >= 0 && selectEl.options[selectEl.selectedIndex]) {
+                    selectedText = selectEl.options[selectEl.selectedIndex].textContent || "";
+                }
+                if (!selectedText && selectEl.options.length) {
+                    selectedText = selectEl.options[0].textContent || "";
+                }
+                labelEl.textContent = selectedText || "Select…";
+
+                optsWrap.innerHTML = "";
+                Array.prototype.forEach.call(selectEl.options, function(opt, idx){
+                    var item = document.createElement("div");
+                    item.className = "tutor-form-select-option" + ((opt.selected || (idx === 0 && !selectEl.value)) ? " is-active" : "");
+                    var span = document.createElement("span");
+                    span.setAttribute("tutor-dropdown-item", "");
+                    span.setAttribute("data-key", opt.value || "");
+                    span.className = "tutor-nowrap-ellipsis";
+                    span.title = opt.textContent || "";
+                    span.textContent = opt.textContent || "";
+                    item.appendChild(span);
+                    item.addEventListener("click", function(){
+                        selectEl.value = opt.value || "";
+                        labelEl.textContent = opt.textContent || "";
+                        var ev = new Event("change", { bubbles: true });
+                        selectEl.dispatchEvent(ev);
+                        var active = optsWrap.querySelectorAll(".tutor-form-select-option");
+                        active.forEach(function(a){ a.classList.remove("is-active"); });
+                        item.classList.add("is-active");
+                    });
+                    optsWrap.appendChild(item);
+                });
+            }
+            function post(params){
+                return fetch(box.getAttribute("data-ajax"),{
+                    method:"POST",
+                    credentials:"same-origin",
+                    headers:{"Content-Type":"application/x-www-form-urlencoded; charset=UTF-8"},
+                    body:(new URLSearchParams(params)).toString()
+                }).then(function(r){ return r.json(); });
+            }
+
+            function setTimeOptions(slots){
+                var list = Array.isArray(slots) ? slots : [];
+                if (!list.length){
+                    timeEl.innerHTML = "<option value=\\"\\">No available slots</option>";
+                    syncTutorSelectUi(timeEl);
+                    return;
+                }
+                timeEl.innerHTML = "<option value=\\"\\">Select…</option>";
+                list.forEach(function(s){
+                    var opt = document.createElement("option");
+                    opt.value = s;
+                    opt.textContent = (s||"").substring(0,5);
+                    timeEl.appendChild(opt);
+                });
+                syncTutorSelectUi(timeEl);
+            }
+
+            function renderAvailableDates(tzName){
+                if (!availableEl) return;
+                var dates = Object.keys(availableMap);
+                if (!dates.length){
+                    availableEl.textContent = "No free dates in the next period.";
+                    return;
+                }
+                var html = "<div style=\\"margin-bottom:6px;\\">Available dates (teacher timezone: <strong>" + (tzName || "") + "</strong>)</div>";
+                html += "<div style=\\"display:flex;flex-wrap:wrap;gap:6px;\\">";
+                dates.slice(0, 12).forEach(function(d){
+                    html += "<button type=\\"button\\" class=\\"button button-small e360-pick-date\\" data-date=\\"" + d + "\\">" + d + "</button>";
+                });
+                html += "</div>";
+                availableEl.innerHTML = html;
+                var btns = availableEl.querySelectorAll(".e360-pick-date");
+                btns.forEach(function(btn){
+                    btn.addEventListener("click", function(){
+                        var d = btn.getAttribute("data-date") || "";
+                        if (!d) return;
+                        dateEl.value = d;
+                        dateEl.dispatchEvent(new Event("change"));
+                    });
+                });
+            }
+
+            function loadSlotsForDate(date){
+                if (!date || !teacherId) { setTimeOptions([]); return; }
+                setModalMsg("Loading available time…");
+                setTimeOptions([]);
+                post({
+                    action:"e360_get_slots",
+                    nonce: box.getAttribute("data-slots-nonce") || "",
+                    teacher_id: teacherId,
+                    date: date,
+                    duration: duration
+                }).then(function(resp){
+                    if (!resp || !resp.success){
+                        setTimeOptions([]);
+                        setModalMsg("Failed to load available time.");
+                        return;
+                    }
+                    var slots = (resp.data && resp.data.slots) ? resp.data.slots : [];
+                    setTimeOptions(slots);
+                    if (slots.length) {
+                        setModalMsg("");
+                    } else {
+                        setModalMsg("No free time for this date.");
+                    }
+                }).catch(function(){
+                    setTimeOptions([]);
+                    setModalMsg("Failed to load available time.");
+                });
+            }
+
+            function loadAvailableDates(){
+                if (availableLoaded) return Promise.resolve();
+                availableLoaded = true;
+                setModalMsg("Loading available dates…");
+                return post({
+                    action:"e360_get_teacher_available_dates",
+                    nonce: box.getAttribute("data-slots-nonce") || "",
+                    teacher_id: teacherId,
+                    duration: duration,
+                    days: 45
+                }).then(function(resp){
+                    if (!resp || !resp.success){
+                        availableMap = {};
+                        if (availableEl) availableEl.textContent = "Failed to load available dates.";
+                        setModalMsg("");
+                        return;
+                    }
+                    availableMap = {};
+                    var items = (resp.data && resp.data.days) ? resp.data.days : [];
+                    items.forEach(function(it){
+                        if (!it || !it.date) return;
+                        availableMap[it.date] = true;
+                    });
+                    var keys = Object.keys(availableMap).sort();
+                    if (keys.length && dateEl) {
+                        dateEl.min = keys[0];
+                    }
+                    renderAvailableDates((resp.data && resp.data.timezone) ? resp.data.timezone : "");
+                    setModalMsg("");
+                }).catch(function(){
+                    if (availableEl) availableEl.textContent = "Failed to load available dates.";
+                    setModalMsg("");
+                });
+            }
+
+            if (openBtn) openBtn.addEventListener("click", function(){
+                modal.style.display="block";
+                setModalMsg("");
+                loadAvailableDates();
+            });
+            if (closeBtn) closeBtn.addEventListener("click", function(){ modal.style.display="none"; });
+            if (modal) modal.addEventListener("click", function(e){ if(e.target===modal) modal.style.display="none"; });
+
+            if (dateEl) dateEl.addEventListener("change", function(){
+                var date = this.value || "";
+                if (!date) { setTimeOptions([]); return; }
+                if (!availableMap[date]) {
+                    setModalMsg("This date may have no free slots. Checking...");
+                }
+                loadSlotsForDate(date);
+            });
+
+            if (sendBtn) sendBtn.addEventListener("click", function(){
+                var date = (dateEl && dateEl.value) ? dateEl.value : "";
+                var time = (timeEl && timeEl.value) ? timeEl.value : "";
+                var reason = (reasonEl && reasonEl.value) ? reasonEl.value : "";
+                if (!date || !time){ setModalMsg("Select date and time"); return; }
+                if (!reason.trim()){ setModalMsg("Please provide reason"); return; }
+                setModalMsg("Sending…");
+                post({
+                    action:"e360_student_request_reschedule",
+                    nonce: box.getAttribute("data-req-nonce") || "",
+                    booking_id: bookingId,
+                    date: date,
+                    time: time,
+                    reason: reason
+                }).then(function(resp){
+                    if (!resp || !resp.success){
+                        var m = resp && resp.data && resp.data.message ? resp.data.message : "Error";
+                        setModalMsg(m);
+                        return;
+                    }
+                    modal.style.display = "none";
+                    setMsg("Request sent to teacher.");
+                });
+            });
+        })();
+        </script>';
+
+        $out .= '</div>';
         return $out;
     }
 
@@ -1388,53 +2849,14 @@ function e360_course_schedule_box_html(int $course_id, int $uid): string {
     ]);
 }
 
-add_action('wp_footer', function(){
-
-    static $done = false;
-    if ($done) return;
-    $done = true;
-    
-    if (!is_singular(['courses', 'tutor_course'])) return;
-    if (!is_user_logged_in()) return;
-
-    $course_id = (int) get_the_ID();
-    $uid = get_current_user_id();
-    if (function_exists('e360_is_course_instructor') && e360_is_course_instructor($uid, $course_id)) {
-        // Teacher schedule is rendered in a dedicated course tab.
-        return;
-    }
-
-    $html = e360_course_schedule_box_html($course_id, $uid);
-    if ($html === '') return;
-
-    ?>
-<div id="e360-course-schedule-box" style="display:none;"><?php echo $html; ?></div>
-<script>
-(function() {
-    var box = document.getElementById("e360-course-schedule-box");
-    if (!box) return;
-
-    var target =
-        document.querySelector(".tutor-sidebar-card .tutor-card-body") ||
-        document.querySelector(".courses-details-info .tutor-card-body");
-
-    if (!target) return;
-
-    box.style.display = "block";
-    if (target.querySelector('#e360-course-schedule-box')) return;
-
-    target.appendChild(box);
-})();
-</script>
-<?php
-});
-
 function e360_course_teacher_schedule_tab_html(int $course_id, int $teacher_id, bool $can_edit = true): string {
     $bookings = e360_get_teacher_bookings($teacher_id, $course_id, 100);
 
     $out = '<div style="padding:8px 0 4px;">';
     $out .= '<h4 style="margin:0 0 8px;">Course schedule</h4>';
     $out .= '<div style="opacity:.8;margin-bottom:10px;">Reschedule lessons within your available hours.</div>';
+    $out .= e360_render_teacher_pending_reschedule_requests($teacher_id, $course_id);
+    $out .= e360_render_teacher_course_calendar_html($teacher_id, $course_id, 30);
 
     if (!$bookings) {
         $out .= '<div style="padding:10px;border:1px solid #ececec;border-radius:8px;opacity:.8;">No booked lessons yet for this course.</div>';
@@ -1450,6 +2872,9 @@ function e360_course_teacher_schedule_tab_html(int $course_id, int $teacher_id, 
         'button_class' => 'tutor-btn tutor-btn-outline-primary tutor-btn-sm',
         'container_style' => 'margin-top:0;',
         'can_edit' => $can_edit,
+        'allow_add' => $can_edit,
+        'course_id' => $course_id,
+        'teacher_id' => $teacher_id,
     ]);
     $out .= '</div>';
 
@@ -1501,6 +2926,18 @@ function e360_resolve_schedule_teacher_id_for_viewer(int $course_id, int $viewer
     return (int) get_post_field('post_author', $course_id);
 }
 
+function e360_course_schedule_tab_content_html(int $course_id, int $uid): string {
+    if (!e360_can_view_course_schedule_tab($uid, $course_id)) return '';
+
+    if (e360_can_manage_course_schedule($uid, $course_id)) {
+        $teacher_id = e360_resolve_schedule_teacher_id_for_viewer($course_id, $uid);
+        if ($teacher_id <= 0) return '';
+        return e360_course_teacher_schedule_tab_html($course_id, $teacher_id, true);
+    }
+
+    return e360_course_schedule_box_html($course_id, $uid);
+}
+
 // Native Tutor LMS tab (works when theme/template uses Tutor tab hooks)
 add_filter('tutor_course/single/nav_items', function($items, $course_id = 0){
     $uid = get_current_user_id();
@@ -1521,9 +2958,7 @@ add_action('tutor_course/single/tab/e360_schedule', function(){
     $course_id = (int) get_the_ID();
     $uid = (int) get_current_user_id();
     if (!e360_can_view_course_schedule_tab($uid, $course_id)) return;
-    $teacher_id = e360_resolve_schedule_teacher_id_for_viewer($course_id, $uid);
-    if ($teacher_id <= 0) return;
-    echo e360_course_teacher_schedule_tab_html($course_id, $teacher_id, e360_can_manage_course_schedule($uid, $course_id));
+    echo e360_course_schedule_tab_content_html($course_id, $uid);
 });
 
 add_action('wp_footer', function () {
@@ -1535,17 +2970,14 @@ add_action('wp_footer', function () {
     if (!$course_id || !$uid) return;
     if (!e360_can_view_course_schedule_tab($uid, $course_id)) return;
 
-    $teacher_id = e360_resolve_schedule_teacher_id_for_viewer($course_id, $uid);
-    if ($teacher_id <= 0) return;
-
-    $html = e360_course_teacher_schedule_tab_html($course_id, $teacher_id, e360_can_manage_course_schedule($uid, $course_id));
+    $html = e360_course_schedule_tab_content_html($course_id, $uid);
     if ($html === '') return;
     ?>
-<div id="e360-course-teacher-schedule-tab-content" style="display:none;"><?php echo $html; ?></div>
+<div id="e360-course-schedule-tab-content" style="display:none;"><?php echo $html; ?></div>
 <script>
 (function() {
     function tryMount() {
-        var src = document.getElementById('e360-course-teacher-schedule-tab-content');
+        var src = document.getElementById('e360-course-schedule-tab-content');
         if (!src) return false;
         if (document.getElementById('e360-course-schedule-tab-nav')) return true;
 
