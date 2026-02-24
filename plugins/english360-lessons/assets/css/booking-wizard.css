@@ -1,0 +1,75 @@
+#e360-wizard .e360-step-title {
+    text-align: center;
+    margin: 0 0 14px;
+}
+
+#e360-wizard .e360-language-cards,
+#e360-wizard .e360-level-cards,
+#e360-wizard .e360-course-cards {
+    margin-bottom: 20px;
+}
+
+#e360-wizard .e360-language-card,
+#e360-wizard .e360-level-card,
+#e360-wizard .e360-course-card {
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    cursor: pointer;
+    overflow: hidden;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+
+#e360-wizard .e360-level-card,
+#e360-wizard .e360-course-card {
+    border-radius: 8px;
+}
+
+#e360-wizard .e360-card-media {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #f4f4f4;
+}
+
+#e360-wizard .e360-card-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#e360-wizard .e360-card-body {
+    padding: 10px 12px 12px;
+}
+
+#e360-wizard .e360-card-title {
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+#e360-wizard .e360-language-card.e360-language-selected,
+#e360-wizard .e360-level-card.e360-level-selected,
+#e360-wizard .e360-course-card.e360-course-selected {
+    border-color: #3e64de;
+}
+
+#e360-wizard .e360-teacher-card.e360-teacher-selected {
+    border-color: #3e64de;
+}
+
+#e360-wizard .e360-teacher-schedule {
+    border-top: 1px solid #eee;
+    padding-top: 10px;
+}
+
+#e360-wizard .e360-teacher-schedule .e360-day-card {
+    min-height: 92px;
+}
+
+@media (max-width: 991px) {
+    #e360-wizard .e360-teacher-schedule .e360-days-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+}

@@ -418,6 +418,13 @@ function e360_course_base_title(string $title): string {
     return trim($t);
 }
 
+function e360_booking_placeholder_image_url(): string {
+    if (function_exists('e360_course_placeholder_image_url')) {
+        return (string) e360_course_placeholder_image_url();
+    }
+    return 'https://lms.english360.ca/wp-content/uploads/2026/02/course-placeholder-english360.png';
+}
+
 function e360_get_courses_by_term() {
     check_ajax_referer('e360_booking_nonce', 'nonce');
 
@@ -448,14 +455,21 @@ function e360_get_courses_by_term() {
         $course_post_id = (int) $p->ID;
         $base_title = e360_course_base_title(get_the_title($course_post_id));
         $key = sanitize_title($base_title);
+        $course_image = get_the_post_thumbnail_url($course_post_id, 'medium_large');
+        if (!$course_image) {
+            $course_image = e360_booking_placeholder_image_url();
+        }
 
         if (!isset($groups[$key])) {
             $groups[$key] = [
                 'course_key'   => $key,
                 'course_title' => $base_title,
+                'image_url'    => $course_image,
                 'variants'     => [],
                 '_seen'        => [],
             ];
+        } elseif (empty($groups[$key]['image_url']) && !empty($course_image)) {
+            $groups[$key]['image_url'] = $course_image;
         }
 
         $author_id = (int) $p->post_author;
@@ -764,7 +778,14 @@ add_shortcode('e360_booking_wizard', function($atts){
     if (is_wp_error($languages)) return '<p>Cannot load languages.</p>';
 
     wp_enqueue_script('jquery');
+    wp_enqueue_style(
+        'e360-booking-wizard',
+        E360_LESSONS_URL . 'assets/css/booking-wizard.css',
+        [],
+        '0.1.0'
+    );
     $nonce = wp_create_nonce('e360_booking_nonce');
+    $placeholder = e360_booking_placeholder_image_url();
 
     ob_start();
     ?>
@@ -772,54 +793,47 @@ add_shortcode('e360_booking_wizard', function($atts){
     data-duration="<?php echo esc_attr($duration); ?>"
     data-registration-url="<?php echo esc_attr($registration_url); ?>"
     data-is-logged-in="<?php echo is_user_logged_in() ? '1' : '0'; ?>">
-    <p>
-        <label>What language would you like to learn?</label><br>
-    <div id="e360-language" class="e360-language-cards"
-        style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;">
+    <h2 class="e360-step-title">What language would you like to learn?</h2>
+    <div id="e360-language" class="e360-language-cards">
+        <div class="row g-3">
         <?php foreach ($languages as $t): ?>
         <?php
                 $term_id = (int) $t->term_id;
                 $thumb_id = get_term_meta($term_id, 'thumbnail_id', true);
                 $img = '';
                 if ($thumb_id) $img = wp_get_attachment_image_url($thumb_id, 'medium');
+                if (!$img) $img = $placeholder;
             ?>
-        <div class="e360-language-card" data-term-id="<?php echo $term_id; ?>"
-            style="border:1px solid #ddd;border-radius:10px;padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;min-height:92px;">
-            <?php if ($img): ?>
-            <img src="<?php echo esc_url($img); ?>" alt="<?php echo esc_attr($t->name); ?>"
-                style="width:64px;height:64px;border-radius:8px;object-fit:cover;">
-            <?php else: ?>
-            <div
-                style="width:64px;height:64px;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-weight:600;color:#555;font-size:20px;">
-                <?php echo esc_html(mb_substr($t->name,0,1)); ?>
-            </div>
-            <?php endif; ?>
-            <div style="flex:1;">
-                <div style="font-weight:600;font-size:18px;line-height:1.2;"><?php echo esc_html($t->name); ?></div>
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="e360-language-card" data-term-id="<?php echo $term_id; ?>">
+                <div class="e360-card-media">
+                    <img src="<?php echo esc_url($img); ?>" alt="<?php echo esc_attr($t->name); ?>">
+                </div>
+                <div class="e360-card-body">
+                    <div class="e360-card-title"><?php echo esc_html($t->name); ?></div>
+                </div>
             </div>
         </div>
         <?php endforeach; ?>
+        </div>
     </div>
-    </p>
 
     <div id="e360-step-level" style="display:none;">
-        <p>
-            <label>Level</label><br>
-        <div id="e360-level" class="e360-level-cards"
-            style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">
-            <div style="opacity:.7">Select language first…</div>
+        <h2 class="e360-step-title">Level</h2>
+        <div id="e360-level" class="e360-level-cards">
+            <div class="row g-3">
+                <div class="col-12" style="opacity:.7">Select language first…</div>
+            </div>
         </div>
-        </p>
     </div>
 
     <div id="e360-step-course" style="display:none;">
-        <p>
-            <label>Course</label><br>
-        <div id="e360-course" class="e360-course-cards"
-            style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
-            <div style="opacity:.7">Select level first…</div>
+        <h2 class="e360-step-title">Course</h2>
+        <div id="e360-course" class="e360-course-cards">
+            <div class="row g-3">
+                <div class="col-12" style="opacity:.7">Select level first…</div>
+            </div>
         </div>
-        </p>
 
         <div id="e360-teacher-list" style="margin:10px 0;"></div>
     </div>
@@ -844,7 +858,6 @@ add_shortcode('e360_booking_wizard', function($atts){
         </p>
 
         <div id="e360-offer-msg" style="margin-top:10px;opacity:.85;"></div>
-        <div id="e360-offer-schedule" style="margin-top:12px;font-size:13px;display:none;"></div>
     </div>
 
     <div id="e360-step-time" style="display:none;">
@@ -881,6 +894,7 @@ add_shortcode('e360_booking_wizard', function($atts){
 jQuery(function($) {
     const nonce = <?php echo json_encode($nonce); ?>;
     const ajaxurl = <?php echo json_encode(admin_url('admin-ajax.php')); ?>;
+    const placeholderImage = <?php echo json_encode($placeholder); ?>;
 
     const $wiz = $('#e360-wizard');
 
@@ -909,12 +923,11 @@ jQuery(function($) {
     function resetAfterLanguage() {
         // visually unselect any language cards
         $('.e360-language-card').css('border-color', '#ddd');
-        $('#e360-level').html('<div style="opacity:.7">Select language first…</div>');
-        $('#e360-course').html('<div style="opacity:.7">Select level first…</div>');
+        $('#e360-level').html('<div class="row g-3"><div class="col-12" style="opacity:.7">Select language first…</div></div>');
+        $('#e360-course').html('<div class="row g-3"><div class="col-12" style="opacity:.7">Select level first…</div></div>');
         $('#e360-teacher-list').empty();
         $('#e360-step-offer').hide();
         $('#e360-offer-msg').text('');
-        $('#e360-offer-schedule').hide().html('');
         $('#e360-plan-wrap').hide();
         $('#e360-plan').html('<option value="">Select…</option>');
         $('#e360-time').html('<option value="">Select date first…</option>');
@@ -932,11 +945,10 @@ jQuery(function($) {
     function resetAfterLevel() {
         // visually unselect any level cards
         $('.e360-level-card').css('border-color', '#ddd');
-        $('#e360-course').html('<div style="opacity:.7">Loading…</div>');
+        $('#e360-course').html('<div class="row g-3"><div class="col-12" style="opacity:.7">Loading…</div></div>');
         $('#e360-teacher-list').empty();
         $('#e360-step-offer').hide();
         $('#e360-offer-msg').text('');
-        $('#e360-offer-schedule').hide().html('');
         $('#e360-plan-wrap').hide();
         $('#e360-plan').html('<option value="">Select…</option>');
         $('#e360-time').html('<option value="">Select date first…</option>');
@@ -1016,12 +1028,14 @@ jQuery(function($) {
     }
 
     function loadTeacherSchedulePreview(teacherId) {
-        const $box = $('#e360-offer-schedule');
+        const $selectedCard = $(`.e360-teacher-card[data-teacher-id="${teacherId}"]`).first();
+        const $box = $selectedCard.find('.e360-teacher-schedule').first();
         if (!teacherId) {
-            $box.hide().html('');
+            $('.e360-teacher-schedule').hide().html('');
             return;
         }
 
+        $('.e360-teacher-schedule').not($box).hide().html('');
         $box.show().html('<em>Loading schedule…</em>');
 
         $.post(ajaxurl, {
@@ -1048,7 +1062,7 @@ jQuery(function($) {
             }
 
             let s = '<div style="font-weight:600;margin-bottom:4px;">Next 7 days</div>';
-            s += '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;">';
+            s += '<div class="e360-days-grid" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;">';
 
             data.days.forEach(function(d) {
                 const dateObj = new Date(d.date);
@@ -1170,10 +1184,10 @@ jQuery(function($) {
     function loadLevels(languageTermId) {
         resetAfterLevel();
         $('#e360-step-level').show();
-        $('#e360-level').html('<div style="opacity:.7">Loading…</div>');
+        $('#e360-level').html('<div class="row g-3"><div class="col-12" style="opacity:.7">Loading…</div></div>');
         // Не показываем блок Course/Loading… до выбора уровня
         $('#e360-step-course').hide();
-        $('#e360-course').html('<div style="opacity:.7">Select level first…</div>');
+        $('#e360-course').html('<div class="row g-3"><div class="col-12" style="opacity:.7">Select level first…</div></div>');
 
         $.post(ajaxurl, {
             action: 'e360_get_child_terms',
@@ -1182,23 +1196,28 @@ jQuery(function($) {
             parent_term_id: languageTermId
         }).done(function(resp) {
             if (!resp.success) {
-                $('#e360-level').html('<div>Error</div>');
+                $('#e360-level').html('<div class="row g-3"><div class="col-12">Error</div></div>');
                 return;
             }
             const items = resp.data.items || [];
             if (!items.length) {
-                $('#e360-level').html('<div>No levels</div>');
+                $('#e360-level').html('<div class="row g-3"><div class="col-12">No levels</div></div>');
                 return;
             }
 
             // render level cards
-            let html = '';
+            let html = '<div class="row g-3">';
             items.forEach(function(it) {
+                const img = it.image_url || placeholderImage;
                 html +=
-                    `<div class=\"e360-level-card\" data-term-id=\"${it.term_id}\" style=\"border:1px solid rgb(221, 221, 221);border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;gap:8px;\">` +
-                    `<div style=\"flex:1;font-weight:600;\">${$('<div>').text(it.name).html()}</div>` +
+                    `<div class=\"col-12 col-md-6 col-lg-4\">` +
+                    `<div class=\"e360-level-card\" data-term-id=\"${it.term_id}\">` +
+                    `<div class=\"e360-card-media\"><img src=\"${$('<div>').text(img).html()}\" alt=\"${$('<div>').text(it.name || '').html()}\"></div>` +
+                    `<div class=\"e360-card-body\"><div class=\"e360-card-title\">${$('<div>').text(it.name).html()}</div></div>` +
+                    `</div>` +
                     `</div>`;
             });
+            html += '</div>';
 
             $('#e360-level').html(html);
             // Сбросить бордер у всех карточек уровня после ajax
@@ -1216,7 +1235,7 @@ jQuery(function($) {
             term_id: levelTermId
         }).done(function(resp) {
             if (!resp || !resp.success) {
-                $('#e360-course').html('<option value="">Error</option>');
+                $('#e360-course').html('<div class="row g-3"><div class="col-12">Error</div></div>');
                 return;
             }
 
@@ -1224,19 +1243,24 @@ jQuery(function($) {
             coursesIndex = {};
 
             if (!items.length) {
-                $('#e360-course').html('<option value="">No courses</option>');
+                $('#e360-course').html('<div class="row g-3"><div class="col-12">No courses</div></div>');
                 return;
             }
 
             // render course cards (was a <select> before)
-            let courseHtml = '';
+            let courseHtml = '<div class="row g-3">';
             items.forEach(function(group) {
                 coursesIndex[group.course_key] = group;
+                const img = group.image_url || placeholderImage;
                 courseHtml +=
-                    `<div class="e360-course-card" data-course-key="${group.course_key}" data-course-title="${$('<div>').text(group.course_title).html()}" style="border:1px solid #ddd;border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;">` +
-                    `<div style="flex:1;font-weight:600;">${$('<div>').text(group.course_title).html()}</div>` +
+                    `<div class="col-12 col-md-6 col-lg-3">` +
+                    `<div class="e360-course-card" data-course-key="${group.course_key}" data-course-title="${$('<div>').text(group.course_title).html()}">` +
+                    `<div class="e360-card-media"><img src="${$('<div>').text(img).html()}" alt="${$('<div>').text(group.course_title || '').html()}"></div>` +
+                    `<div class="e360-card-body"><div class="e360-card-title">${$('<div>').text(group.course_title).html()}</div></div>` +
+                    `</div>` +
                     `</div>`;
             });
+            courseHtml += '</div>';
             $('#e360-course').html(courseHtml);
 
             // Спрячем учителей/время пока курс не выбран
@@ -1294,7 +1318,7 @@ jQuery(function($) {
         // Скрыть блок Course до выбора уровня
         $('#e360-step-course').hide();
         // Сбросить контент и показать заглушку
-        $('#e360-course').html('<div style="opacity:.7">Select level first…</div>');
+        $('#e360-course').html('<div class="row g-3"><div class="col-12" style="opacity:.7">Select level first…</div></div>');
 
         const langId = parseInt($(this).data('term-id'), 10) || 0;
         if (!langId) return;
@@ -1304,28 +1328,12 @@ jQuery(function($) {
 
     // Step 2: level (cards)
     $(document).on('click', '.e360-level-card', function() {
-        // Сбросить стиль и класс у всех карточек уровня
-        $('.e360-level-card').each(function() {
-            $(this).attr('style',
-                'border:1px solid rgb(221, 221, 221);border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;gap:8px;'
-            ).removeClass('e360-level-selected');
-        });
-        // Выделить выбранную
-        $(this).attr('style',
-            'border:1px solid rgb(62, 100, 222);border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;gap:8px;'
-        ).addClass('e360-level-selected');
-        console.log('LEVEL CLICKED', $(this).data('term-id'), 'style:', $(this).attr('style'));
-        // Повторно применить стиль через 100мс (если DOM обновляется)
-        var $el = $(this);
-        setTimeout(function() {
-            $el.attr('style',
-                'border:1px solid rgb(62, 100, 222);border-radius:8px;padding:8px;cursor:pointer;display:flex;align-items:center;gap:8px;'
-            );
-            console.log('LEVEL STYLE REAPPLIED', $el.data('term-id'), $el.attr('style'));
-        }, 100);
+        $('.e360-level-card').css('border-color', '#ddd').removeClass('e360-level-selected');
+        $(this).css('border-color', '#3e64de').addClass('e360-level-selected');
+        console.log('LEVEL CLICKED', $(this).data('term-id'));
         // Показать блок Course после выбора уровня и показать лоадер
         $('#e360-step-course').show();
-        $('#e360-course').html('<div style="opacity:.7">Loading…</div>');
+        $('#e360-course').html('<div class="row g-3"><div class="col-12" style="opacity:.7">Loading…</div></div>');
 
         const levelId = parseInt($(this).data('term-id'), 10) || 0;
         selected.level_term_id = levelId || null;
@@ -1338,8 +1346,8 @@ jQuery(function($) {
         const courseKey = $(this).data('course-key') || '';
         selected.course_key = courseKey || null;
 
-        $('.e360-course-card').css('border-color', '#ddd');
-        $(this).css('border-color', '#3e64de');
+        $('.e360-course-card').css('border-color', '#ddd').removeClass('e360-course-selected');
+        $(this).css('border-color', '#3e64de').addClass('e360-course-selected');
         // reset selection
         selected.course_id = null;
         selected.teacher_id = null;
@@ -1395,9 +1403,9 @@ jQuery(function($) {
              data-course-id="${v.course_id}"
              data-teacher-name="${$('<div>').text(v.teacher_name||'').html()}"
              style="border:1px solid #ddd;border-radius:12px;padding:10px;">
-            <div style="display:flex;gap:10px;align-items:flex-start;">
-                <div>${avatar}</div>
-                <div style="flex:1;">
+            <div style="display:flex;gap:10px;align-items:flex-start;" class="e360-teacher-main">
+                <div class="e360-teacher-photo">${avatar}</div>
+                <div style="flex:1;" class="e360-teacher-info">
                     <div style="font-weight:600;">${$('<div>').text(v.teacher_name || '').html()}</div>
                     ${role}
                     ${bioBtn}
@@ -1408,6 +1416,7 @@ jQuery(function($) {
                     </div>
                 </div>
             </div>
+            <div class="e360-teacher-schedule" style="display:none;margin-top:10px;font-size:13px;"></div>
         </div>`;
         });
 
@@ -1440,8 +1449,9 @@ jQuery(function($) {
 
         // card click = select teacher
         $(document).off('click.e360card').on('click.e360card', '.e360-teacher-card', function() {
-            $('.e360-teacher-card').css('border-color', '#ddd');
-            $(this).css('border-color', '#3e64de');
+            $('.e360-teacher-card').css('border-color', '#ddd').removeClass('e360-teacher-selected');
+            $(this).css('border-color', '#3e64de').addClass('e360-teacher-selected');
+            $('.e360-teacher-schedule').hide().html('');
 
             const teacherId = parseInt($(this).data('teacher-id'), 10) || 0;
             const courseId = parseInt($(this).data('course-id'), 10) || 0;
@@ -1459,7 +1469,6 @@ jQuery(function($) {
             $('#e360-date').val('');
             $('#e360-time').html('<option value="">Select date first…</option>');
             $('#e360-offer-msg').text('');
-            $('#e360-offer-schedule').show().html('<em>Loading schedule…</em>');
             $('.e360-purchase-card').removeClass('tutor-btn-primary').addClass(
                 'tutor-btn-outline-primary');
             $('#e360-step-offer').show();
@@ -1882,10 +1891,16 @@ function e360_get_child_terms() {
 
     $items = [];
     foreach ($terms as $t) {
+        $thumb_id = (int) get_term_meta((int) $t->term_id, 'thumbnail_id', true);
+        $img = $thumb_id ? wp_get_attachment_image_url($thumb_id, 'medium_large') : '';
+        if (!$img) {
+            $img = e360_booking_placeholder_image_url();
+        }
         $items[] = [
             'term_id' => (int) $t->term_id,
             'name'    => $t->name,
             'slug'    => $t->slug,
+            'image_url' => $img,
         ];
     }
 

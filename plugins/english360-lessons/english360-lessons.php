@@ -7,6 +7,13 @@
 
 defined('ABSPATH') || exit;
 
+if (!defined('E360_LESSONS_FILE')) {
+    define('E360_LESSONS_FILE', __FILE__);
+}
+if (!defined('E360_LESSONS_URL')) {
+    define('E360_LESSONS_URL', plugin_dir_url(__FILE__));
+}
+
 require_once __DIR__ . '/includes/install.php';
 require_once __DIR__ . '/includes/wc-hooks.php';
 require_once __DIR__ . '/includes/shortcodes.php';

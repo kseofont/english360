@@ -1,0 +1,22 @@
+.single-courses-box .content > a.author,
+.single-courses-box .content .price,
+.single-courses-box .content .list-item-price,
+.single-courses-box .content .tutor-item-price,
+.popover-quickview-courses .update-info,
+.popover-quickview-courses .tutor-course-wishlist-btn,
+.popover-quickview-courses .tutor-icon-bookmark-line {
+    display: none !important;
+}
+
+.single-courses-box a.default-btn,
+.popover-quickview-courses a.default-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer !important;
+}
+
+.single-courses-box a.default-btn i,
+.popover-quickview-courses a.default-btn i {
+    display: none !important;
+}

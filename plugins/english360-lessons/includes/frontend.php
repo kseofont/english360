@@ -67,37 +67,16 @@ function e360_page_has_shortcode(string $tag): bool {
     return has_shortcode((string) $post->post_content, $tag);
 }
 
-add_action('wp_head', function () {
+add_action('wp_enqueue_scripts', function () {
     if (is_admin()) {
         return;
     }
-    ?>
-<style id="e360-tutor-course-temp-hide-meta">
-/* TEMP: hide author and price in Tutor course cards */
-.single-courses-box .content > a.author,
-.single-courses-box .content .price,
-.single-courses-box .content .list-item-price,
-.single-courses-box .content .tutor-item-price,
-.popover-quickview-courses .update-info,
-.popover-quickview-courses .tutor-course-wishlist-btn,
-.popover-quickview-courses .tutor-icon-bookmark-line {
-    display: none !important;
-}
-
-.single-courses-box a.default-btn,
-.popover-quickview-courses a.default-btn {
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer !important;
-}
-
-.single-courses-box a.default-btn i,
-.popover-quickview-courses a.default-btn i {
-    display: none !important;
-}
-</style>
-<?php
+    wp_enqueue_style(
+        'e360-tutor-course-frontend',
+        E360_LESSONS_URL . 'assets/css/tutor-course.css',
+        [],
+        '0.1.0'
+    );
 });
 
 add_action('wp_footer', function () {
