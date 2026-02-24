@@ -138,7 +138,7 @@ add_action('wp_footer', function () {
     // 2) Если это courses URL вида /courses/.../lessons/...
     elseif (is_singular('courses')) {
         $uri = $_SERVER['REQUEST_URI'] ?? '';
-        if (strpos($uri, '/lessons/') === false) return;
+        if (strpos($uri, '/lessons/') === false && strpos($uri, '/zoom-lessons/') === false) return;
 
         $course_id = (int) get_the_ID();
 
@@ -227,6 +227,14 @@ add_action('wp_footer', function () {
     }
     // fallback: просто в header
     if (!target) target = document.querySelector('.tutor-course-topic-single-header');
+    if (!target) {
+        // Theme-specific fallback (including zoom-lessons templates).
+        target =
+            document.querySelector('.tutor-course-topic-single-content') ||
+            document.querySelector('.tutor-course-topic-single-body') ||
+            document.querySelector('main') ||
+            document.body;
+    }
     if (!target) return;
 
     box.style.display = 'block';

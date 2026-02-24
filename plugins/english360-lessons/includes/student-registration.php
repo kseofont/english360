@@ -1028,7 +1028,7 @@ jQuery(function($) {
             action: 'e360_get_schedule_preview_bulk',
             nonce,
             duration: selected.duration,
-            include_past_today: 1,
+            include_past_today: 0,
             teacher_ids: JSON.stringify([teacherId])
         }).done(function(resp) {
             if (!resp || !resp.success) {
@@ -1092,6 +1092,11 @@ jQuery(function($) {
 
     function selectPreviewSlot(date, time) {
         if (!date || !time) return;
+        var dt = new Date(date + 'T' + time + ':00');
+        if (!isNaN(dt.getTime()) && dt.getTime() < Date.now()) {
+            $('#e360-msg').text('This time slot is already in the past. Please choose a future time.');
+            return;
+        }
         if (!Array.isArray(selected.slots)) selected.slots = [];
         const key = date + '|' + time;
         const idx = selected.slots.findIndex(function(s) {
@@ -1258,7 +1263,7 @@ jQuery(function($) {
             teacher_id: teacherId,
             date: date,
             duration: selected.duration,
-            include_past_today: 1
+            include_past_today: 0
         }).done(function(resp) {
             if (!resp.success) {
                 $('#e360-time').html('<option value="">Error</option>');

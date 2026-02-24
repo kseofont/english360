@@ -18,6 +18,7 @@ require_once __DIR__ . '/includes/teacher-course-sidebar.php';
 require_once __DIR__ . '/includes/admin-credits-ui.php';
 require_once __DIR__ . '/includes/students-lessons.php';
 require_once __DIR__ . '/includes/teacher-calendar.php';
+require_once __DIR__ . '/includes/frontend.php';
 
 
 

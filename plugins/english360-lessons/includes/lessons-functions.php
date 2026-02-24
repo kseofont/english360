@@ -31,6 +31,10 @@ return $parent;
 // 2) helper: teacher can manage this lesson? (is course author or admin)
 function e360_teacher_can_manage_lesson(int $teacher_id, int $lesson_id): bool {
     $course_id = e360_get_course_id_by_lesson($lesson_id);
+    if (!$course_id && function_exists('e360_detect_course_id_from_course_url')) {
+        // Zoom lessons may not store direct lesson->course meta. Fallback to course slug from URL.
+        $course_id = (int) e360_detect_course_id_from_course_url();
+    }
     if (!$course_id) return false;
 
     return e360_is_course_instructor($teacher_id, $course_id);
@@ -65,9 +69,6 @@ if (!is_user_logged_in()) return $content;
 $pt = get_post_type(get_the_ID());
 if (!in_array($pt, ['lesson','tutor_lesson','tutor_course_lesson','topic','tutor_topic'], true)) return $content;
 
-
-// only teacher/admin
-if (!current_user_can('tutor_instructor') && !current_user_can('manage_options')) return $content;
 
 $teacher_id = get_current_user_id();
 $lesson_id = (int) get_the_ID();
@@ -118,6 +119,7 @@ ob_start(); ?>
                 </option>
                 <?php endforeach; ?>
             </select>
+            <div id="e360-student-credits-preview" style="margin-top:6px;font-size:12px;opacity:.8;">Select a student to see credits.</div>
         </div>
 
         <button type="button" id="e360-mark-lesson-btn" class="button button-primary">
@@ -139,6 +141,33 @@ jQuery(function($) {
     function msg(html) {
         $('#e360-mark-lesson-msg').html(html);
     }
+
+    function loadCreditsPreview() {
+        const studentId = parseInt($('#e360-student-id').val(), 10) || 0;
+        if (!studentId) {
+            $('#e360-student-credits-preview').text('Select a student to see credits.');
+            return;
+        }
+        $('#e360-student-credits-preview').text('Loading credits…');
+        $.post(ajaxurl, {
+            action: 'e360_teacher_get_student_credits',
+            nonce: nonce,
+            course_id: courseId,
+            student_id: studentId
+        }).done(function(resp) {
+            if (!resp || !resp.success || !resp.data) {
+                $('#e360-student-credits-preview').text('Credits unavailable.');
+                return;
+            }
+            const d = resp.data || {};
+            $('#e360-student-credits-preview').html(
+                'Credits remaining: <strong>' + (d.balance ?? 0) + '</strong> <span style="opacity:.7;">(completed: ' + (d.used ?? 0) + ')</span>'
+            );
+        }).fail(function() {
+            $('#e360-student-credits-preview').text('Credits unavailable.');
+        });
+    }
+    $('#e360-student-id').on('change', loadCreditsPreview);
 
     $('#e360-mark-lesson-btn').on('click', function() {
         const studentId = parseInt($('#e360-student-id').val(), 10) || 0;
@@ -191,9 +220,6 @@ add_action('wp_ajax_e360_mark_lesson_completed', function(){
     check_ajax_referer('e360_mark_lesson', 'nonce');
 
     $teacher_id = get_current_user_id();
-    if (!current_user_can('tutor_instructor') && !current_user_can('manage_options')) {
-        wp_send_json_error(['message' => 'Forbidden'], 403);
-    }
 
     $lesson_id  = isset($_POST['lesson_id']) ? (int) $_POST['lesson_id'] : 0;
     $course_id  = isset($_POST['course_id']) ? (int) $_POST['course_id'] : 0;
@@ -290,6 +316,29 @@ if (class_exists('\Tutor\Models\LessonModel')) {
         'balance' => $bal,
         'used'    => $used,
     ]);
+});
+
+add_action('wp_ajax_e360_teacher_get_student_credits', function(){
+    if (!is_user_logged_in()) wp_send_json_error(['message' => 'Not logged in'], 401);
+    check_ajax_referer('e360_mark_lesson', 'nonce');
+
+    $teacher_id = get_current_user_id();
+    $course_id = isset($_POST['course_id']) ? (int)$_POST['course_id'] : 0;
+    $student_id = isset($_POST['student_id']) ? (int)$_POST['student_id'] : 0;
+
+    if ($course_id <= 0 || $student_id <= 0) {
+        wp_send_json_error(['message' => 'Invalid data'], 400);
+    }
+    if (!current_user_can('manage_options') && !e360_is_course_instructor($teacher_id, $course_id)) {
+        wp_send_json_error(['message' => 'Not your course'], 403);
+    }
+    if (!current_user_can('manage_options') && !e360_is_student_enrolled_in_course($student_id, $course_id)) {
+        wp_send_json_error(['message' => 'Student not enrolled'], 403);
+    }
+
+    $bal = function_exists('e360_get_credits_balance') ? (int)e360_get_credits_balance($student_id, $course_id) : 0;
+    $used = function_exists('e360_get_credits_used') ? (int)e360_get_credits_used($student_id, $course_id) : 0;
+    wp_send_json_success(['balance' => $bal, 'used' => $used]);
 });
 
 /**
@@ -695,27 +744,65 @@ function e360_is_student_enrolled_in_course(int $student_id, int $course_id): bo
  */
 function e360_detect_lesson_id_from_course_lesson_url(): int {
     $uri = $_SERVER['REQUEST_URI'] ?? '';
-    if (!preg_match('~\/lessons\/([^\/\?\#]+)~', $uri, $m)) return 0;
+    if (!preg_match('~\/(?:lessons|zoom-lessons)\/([^\/\?\#]+)~', $uri, $m)) return 0;
 
     $slug = sanitize_title($m[1]);
-    $p = get_page_by_path($slug, OBJECT, ['lesson','tutor_lesson','tutor_course_lesson','topic','tutor_topic']);
+    $p = get_page_by_path($slug, OBJECT, ['lesson','tutor_lesson','tutor_course_lesson','topic','tutor_topic','zoom_lessons','tutor_zoom','tutor_zoom_meeting']);
+    if ($p) return (int) $p->ID;
+
+    // Fallback for custom lesson/zoom post types used by themes/addons.
+    $ids = get_posts([
+        'name' => $slug,
+        'post_type' => 'any',
+        'post_status' => 'any',
+        'fields' => 'ids',
+        'numberposts' => 1,
+    ]);
+    if (!empty($ids)) return (int)$ids[0];
+
+    // Last-resort DB lookup for plugins/themes with custom, non-public zoom post types.
+    global $wpdb;
+    if (!($wpdb instanceof wpdb)) return 0;
+    $sql = $wpdb->prepare(
+        "SELECT ID
+         FROM {$wpdb->posts}
+         WHERE post_name = %s
+           AND post_status NOT IN ('trash', 'auto-draft')
+         ORDER BY
+           CASE
+             WHEN post_type IN ('lesson','tutor_lesson','tutor_course_lesson','topic','tutor_topic','zoom_lessons','tutor_zoom','tutor_zoom_meeting') THEN 0
+             WHEN post_type LIKE '%%zoom%%' THEN 1
+             ELSE 9
+           END,
+           ID DESC
+         LIMIT 1",
+        $slug
+    );
+    $id = (int) $wpdb->get_var($sql);
+    return $id > 0 ? $id : 0;
+}
+
+function e360_detect_course_id_from_course_url(): int {
+    $id = (int) get_the_ID();
+    if ($id > 0 && get_post_type($id) === 'courses') return $id;
+
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    if (!preg_match('~\/courses\/([^\/\?\#]+)~', $uri, $m)) return 0;
+
+    $slug = sanitize_title($m[1]);
+    $p = get_page_by_path($slug, OBJECT, 'courses');
     return $p ? (int) $p->ID : 0;
 }
 
 add_action('wp_footer', function () {
-    // именно шаблон курса
-    if (!is_singular('courses')) return;
     if (!is_user_logged_in()) return;
 
     // только если это урл урока внутри курса
     $uri = $_SERVER['REQUEST_URI'] ?? '';
-    if (strpos($uri, '/lessons/') === false) return;
-
-    // teacher/admin
-    if (!current_user_can('tutor_instructor') && !current_user_can('manage_options')) return;
+    if (strpos($uri, '/lessons/') === false && strpos($uri, '/zoom-lessons/') === false) return;
 
     $teacher_id = get_current_user_id();
-    $course_id  = (int) get_the_ID();
+    $course_id  = function_exists('e360_detect_course_id_from_course_url') ? (int)e360_detect_course_id_from_course_url() : 0;
     if (!$course_id) return;
 
     // разрешаем и author, и instructor
@@ -748,6 +835,7 @@ add_action('wp_footer', function () {
                 </option>
                 <?php endforeach; ?>
             </select>
+            <div id="e360-student-credits-preview" style="margin-top:6px;font-size:12px;opacity:.8;">Select a student to see credits.</div>
         </div>
 
         <button type="button" id="e360-mark-lesson-btn" class="tutor-btn tutor-btn-primary tutor-btn-sm">
@@ -772,12 +860,58 @@ add_action('wp_footer', function () {
     if (target) {
         box.style.display = 'block';
         target.insertBefore(box, target.firstChild);
+    } else {
+        // Fallback for theme-specific lesson templates (including zoom-lessons).
+        var fallback =
+            document.querySelector('.tutor-course-topic-single-content') ||
+            document.querySelector('.tutor-course-topic-single-body') ||
+            document.querySelector('main') ||
+            document.body;
+        if (fallback) {
+            box.style.display = 'block';
+            fallback.insertBefore(box, fallback.firstChild);
+        }
     }
 
     // обработчик кнопки (без jQuery)
     function setMsg(html) {
         document.getElementById('e360-mark-lesson-msg').innerHTML = html;
     }
+
+    function loadCreditsPreview() {
+        var sel = document.getElementById('e360-student-id');
+        var preview = document.getElementById('e360-student-credits-preview');
+        if (!sel || !preview) return;
+        var studentId = parseInt(sel.value, 10) || 0;
+        if (!studentId) {
+            preview.textContent = 'Select a student to see credits.';
+            return;
+        }
+        preview.textContent = 'Loading credits…';
+        var fd = new FormData();
+        fd.append('action', 'e360_teacher_get_student_credits');
+        fd.append('nonce', box.getAttribute('data-nonce'));
+        fd.append('course_id', parseInt(box.getAttribute('data-course-id'), 10) || 0);
+        fd.append('student_id', studentId);
+        fetch(box.getAttribute('data-ajax'), {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: fd
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(resp) {
+            if (!resp || !resp.success || !resp.data) {
+                preview.textContent = 'Credits unavailable.';
+                return;
+            }
+            var d = resp.data || {};
+            preview.innerHTML = 'Credits remaining: <strong>' + (d.balance ?? 0) + '</strong> <span style="opacity:.7;">(completed: ' + (d.used ?? 0) + ')</span>';
+        })
+        .catch(function() {
+            preview.textContent = 'Credits unavailable.';
+        });
+    }
+    document.getElementById('e360-student-id').addEventListener('change', loadCreditsPreview);
 
     document.getElementById('e360-mark-lesson-btn').addEventListener('click', function() {
         var studentId = parseInt(document.getElementById('e360-student-id').value, 10) || 0;
@@ -837,7 +971,7 @@ add_action('wp_footer', function () {
     if (current_user_can('tutor_instructor') || current_user_can('manage_options')) return;
 
     $uri = $_SERVER['REQUEST_URI'] ?? '';
-    if (strpos($uri, '/lessons/') === false) return;
+    if (strpos($uri, '/lessons/') === false && strpos($uri, '/zoom-lessons/') === false) return;
 
     echo '<style>
         .tutor-topbar-complete-btn { display:none !important; }

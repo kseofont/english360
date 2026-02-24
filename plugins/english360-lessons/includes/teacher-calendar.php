@@ -1458,6 +1458,7 @@ add_action('wp_ajax_e360_teacher_add_booking', function(){
     if (!$new_id) {
         wp_send_json_error(['message'=>'Could not create booking (slot conflict or invalid data)'], 409);
     }
+    e360_mark_pending_add_lessons_request_approved($student_id, $course_id, $teacher_id, $date, $time, (int)$uid);
     wp_send_json_success(['booking_id' => (int)$new_id]);
 });
 
@@ -1636,9 +1637,14 @@ add_action('wp_ajax_e360_student_request_reschedule', function(){
     $booking_id = isset($_POST['booking_id']) ? (int)$_POST['booking_id'] : 0;
     $date = isset($_POST['date']) ? sanitize_text_field(wp_unslash($_POST['date'])) : '';
     $time = isset($_POST['time']) ? sanitize_text_field(wp_unslash($_POST['time'])) : '';
+    $request_type = isset($_POST['request_type']) ? sanitize_key(wp_unslash($_POST['request_type'])) : 'once';
+    $source_ts_utc = isset($_POST['source_ts_utc']) ? (int)$_POST['source_ts_utc'] : 0;
     $reason = isset($_POST['reason']) ? sanitize_textarea_field(wp_unslash($_POST['reason'])) : '';
     if ($reason === '') {
         wp_send_json_error(['message' => 'Reason is required'], 400);
+    }
+    if (!in_array($request_type, ['once', 'weekly', 'add_lessons'], true)) {
+        $request_type = 'once';
     }
 
     if ($booking_id <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !preg_match('/^\d{2}:\d{2}$/', $time)) {
@@ -1650,10 +1656,24 @@ add_action('wp_ajax_e360_student_request_reschedule', function(){
         wp_send_json_error(['message' => 'Not your booking'], 403);
     }
 
-    $next_ts = e360_booking_next_occurrence_ts($booking_id);
-    if ($next_ts <= 0) wp_send_json_error(['message' => 'No upcoming lesson found'], 400);
-    if (($next_ts - current_time('timestamp', true)) < DAY_IN_SECONDS) {
-        wp_send_json_error(['message' => 'You can request reschedule only earlier than 24 hours before the next lesson.'], 400);
+    $now_utc = current_time('timestamp', true);
+    $source_occurrence_ts = 0;
+    if ($request_type !== 'add_lessons') {
+        $from_utc = $now_utc - DAY_IN_SECONDS;
+        $to_utc = $now_utc + (120 * DAY_IN_SECONDS);
+        $occ = e360_booking_occurrences_utc_for_range($booking_id, $from_utc, $to_utc);
+        if (!$occ) wp_send_json_error(['message' => 'No upcoming lesson found'], 400);
+        if ($source_ts_utc > 0 && in_array($source_ts_utc, $occ, true)) {
+            $source_occurrence_ts = $source_ts_utc;
+        } else {
+            foreach ($occ as $ts) {
+                if ((int)$ts >= $now_utc) { $source_occurrence_ts = (int)$ts; break; }
+            }
+        }
+        if ($source_occurrence_ts <= 0) wp_send_json_error(['message' => 'No upcoming lesson found'], 400);
+        if (($source_occurrence_ts - $now_utc) < DAY_IN_SECONDS) {
+            wp_send_json_error(['message' => 'This lesson cannot be changed: less than 24 hours left. Choose another lesson or request additional lessons.'], 400);
+        }
     }
 
     $teacher_id = (int) get_post_meta($booking_id, 'teacher_id', true);
@@ -1673,10 +1693,13 @@ add_action('wp_ajax_e360_student_request_reschedule', function(){
         'student_id' => (int)$uid,
         'proposed_date' => $date,
         'proposed_time' => $time,
+        'request_type' => $request_type,
+        'source_lesson_ts_utc' => $source_occurrence_ts,
+        'add_lessons_requested' => ($request_type === 'add_lessons') ? 1 : 0,
         'reason' => $reason,
         'status' => 'pending',
         'created_at' => current_time('mysql'),
-        'next_lesson_ts_utc' => $next_ts,
+        'next_lesson_ts_utc' => $source_occurrence_ts,
     ];
     update_post_meta($booking_id, 'e360_reschedule_requests', $requests);
 
@@ -1775,6 +1798,9 @@ function e360_get_booking_reschedule_requests(int $booking_id, bool $only_pendin
             'student_id' => (int)($r['student_id'] ?? 0),
             'proposed_date' => (string)($r['proposed_date'] ?? ''),
             'proposed_time' => (string)($r['proposed_time'] ?? ''),
+            'request_type' => sanitize_key((string)($r['request_type'] ?? 'once')),
+            'source_lesson_ts_utc' => (int)($r['source_lesson_ts_utc'] ?? 0),
+            'add_lessons_requested' => !empty($r['add_lessons_requested']) ? 1 : 0,
             'reason' => (string)($r['reason'] ?? ''),
             'created_at' => (string)($r['created_at'] ?? ''),
         ];
@@ -1811,6 +1837,48 @@ function e360_mark_matching_reschedule_request_status(
         if ($actor_user_id > 0) $rows[$i]['updated_by'] = (int)$actor_user_id;
         update_post_meta($booking_id, 'e360_reschedule_requests', $rows);
         return;
+    }
+}
+
+function e360_mark_pending_add_lessons_request_approved(int $student_id, int $course_id, int $teacher_id, string $date, string $time, int $actor_user_id = 0): void {
+    if ($student_id <= 0 || $course_id <= 0 || $teacher_id <= 0) return;
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) return;
+    if (!preg_match('/^\d{2}:\d{2}$/', $time)) return;
+
+    $ids = get_posts([
+        'post_type' => 'e360_booking',
+        'post_status' => ['publish', 'pending'],
+        'numberposts' => 50,
+        'fields' => 'ids',
+        'orderby' => 'ID',
+        'order' => 'DESC',
+        'meta_query' => [
+            ['key' => 'student_id', 'value' => $student_id, 'compare' => '=', 'type' => 'NUMERIC'],
+            ['key' => 'course_id', 'value' => $course_id, 'compare' => '=', 'type' => 'NUMERIC'],
+            ['key' => 'teacher_id', 'value' => $teacher_id, 'compare' => '=', 'type' => 'NUMERIC'],
+        ],
+    ]);
+    if (!$ids) return;
+
+    foreach ($ids as $bid) {
+        $rows = get_post_meta((int)$bid, 'e360_reschedule_requests', true);
+        if (!is_array($rows) || !$rows) continue;
+        for ($i = count($rows) - 1; $i >= 0; $i--) {
+            if (!isset($rows[$i]) || !is_array($rows[$i])) continue;
+            $r = $rows[$i];
+            $status = sanitize_key((string)($r['status'] ?? 'pending'));
+            $rtype = sanitize_key((string)($r['request_type'] ?? 'once'));
+            $rdate = (string)($r['proposed_date'] ?? '');
+            $rtime = (string)($r['proposed_time'] ?? '');
+            if ($status !== 'pending') continue;
+            if ($rtype !== 'add_lessons') continue;
+            if ($rdate !== $date || $rtime !== $time) continue;
+            $rows[$i]['status'] = 'approved';
+            $rows[$i]['updated_at'] = current_time('mysql');
+            if ($actor_user_id > 0) $rows[$i]['updated_by'] = (int)$actor_user_id;
+            update_post_meta((int)$bid, 'e360_reschedule_requests', $rows);
+            return;
+        }
     }
 }
 
@@ -1900,11 +1968,20 @@ function e360_render_teacher_pending_reschedule_requests(int $teacher_id, int $c
         $sid = (int)get_post_meta((int)$bid, 'student_id', true);
         $student_label = e360_user_public_label_simple($sid);
         foreach ($reqs as $r) {
+            $type = (string)($r['request_type'] ?? 'once');
+            if (!in_array($type, ['once', 'weekly', 'add_lessons'], true)) $type = 'once';
+            $source_txt = '';
+            if (!empty($r['source_lesson_ts_utc'])) {
+                $tz_name = e360_get_teacher_timezone_string($teacher_id);
+                $source_txt = wp_date('Y-m-d H:i', (int)$r['source_lesson_ts_utc'], new DateTimeZone($tz_name));
+            }
             $rows[] = [
                 'booking_id' => (int)$bid,
                 'student' => $student_label,
                 'proposed_date' => (string)$r['proposed_date'],
                 'proposed_time' => (string)$r['proposed_time'],
+                'request_type' => $type,
+                'source_txt' => $source_txt,
                 'reason' => (string)$r['reason'],
                 'created_at' => (string)$r['created_at'],
             ];
@@ -1922,6 +1999,11 @@ function e360_render_teacher_pending_reschedule_requests(int $teacher_id, int $c
         $out .= '<div style="border:1px solid #ececec;border-radius:8px;padding:8px;">';
         $out .= '<div style="font-weight:600;">' . esc_html($r['student']) . '</div>';
         $out .= '<div style="font-size:13px;opacity:.9;">Requested: ' . esc_html($r['proposed_date'] . ' ' . $r['proposed_time']) . '</div>';
+        $type_label = ($r['request_type'] === 'weekly') ? 'Weekly change' : (($r['request_type'] === 'add_lessons') ? 'Add lessons at new time' : 'One-time change');
+        $out .= '<div style="font-size:13px;opacity:.9;">Type: ' . esc_html($type_label) . '</div>';
+        if ($r['source_txt'] !== '') {
+            $out .= '<div style="font-size:12px;opacity:.75;">Lesson to change: ' . esc_html($r['source_txt']) . '</div>';
+        }
         if ($r['reason'] !== '') {
             $out .= '<div style="font-size:13px;opacity:.9;">Reason: ' . esc_html($r['reason']) . '</div>';
         }
@@ -2541,7 +2623,20 @@ function e360_course_schedule_box_html(int $course_id, int $uid): string {
         $duration = (int) get_post_meta($bid, 'duration_min', true);
         if ($duration <= 0) $duration = 60;
         $box_id = 'e360-student-reschedule-box-' . $course_id . '-' . $uid . '-' . $bid;
-        $can_request = ((int)$next['ts_utc'] - current_time('timestamp', true)) >= DAY_IN_SECONDS;
+        $source_opts = [];
+        $occ_from = current_time('timestamp', true);
+        $occ_to = $occ_from + (120 * DAY_IN_SECONDS);
+        $occ_list = e360_booking_occurrences_utc_for_range($bid, $occ_from, $occ_to);
+        $tz_local = new DateTimeZone($tz_name);
+        foreach ((array)$occ_list as $ots) {
+            $ots = (int)$ots;
+            if ($ots <= 0) continue;
+            $source_opts[] = [
+                'ts' => $ots,
+                'label' => wp_date('Y-m-d H:i', $ots, $tz_local),
+                'disabled' => (($ots - current_time('timestamp', true)) < DAY_IN_SECONDS),
+            ];
+        }
 
         $out .= '<div class="tutor-course-progress-wrapper tutor-mb-32" style="margin-top:14px;">';
         $out .= '<h3 class="tutor-color-black tutor-fs-5 tutor-fw-bold tutor-mb-16">Your lesson schedule</h3>';
@@ -2573,12 +2668,8 @@ function e360_course_schedule_box_html(int $course_id, int $uid): string {
         $out .= '</div></div>';
 
         $out .= '<div id="' . esc_attr($box_id) . '" style="margin-top:12px;" data-ajax="' . esc_attr($ajax) . '" data-req-nonce="' . esc_attr($req_nonce) . '" data-slots-nonce="' . esc_attr($slots_nonce) . '" data-booking-id="' . (int)$bid . '" data-teacher-id="' . (int)$teacher_id . '" data-duration="' . (int)$duration . '">';
-        if ($can_request) {
-            $out .= '<button type="button" class="tutor-btn tutor-btn-outline-primary tutor-btn-sm e360-open-student-reschedule">Request time change</button>';
-            $out .= '<div style="font-size:12px;opacity:.75;margin-top:4px;">Requests are allowed only earlier than 24 hours before next lesson.</div>';
-        } else {
-            $out .= '<div style="font-size:12px;opacity:.75;">Reschedule request is disabled: less than 24 hours before next lesson.</div>';
-        }
+        $out .= '<button type="button" class="tutor-btn tutor-btn-outline-primary tutor-btn-sm e360-open-student-reschedule">Request time change</button>';
+        $out .= '<div style="font-size:12px;opacity:.75;margin-top:4px;">You can only move lessons with more than 24 hours left. Weekly and additional-lesson requests are allowed.</div>';
         $out .= '<span class="e360-student-reschedule-msg" style="margin-left:8px;opacity:.8;"></span>';
         $out .= '
         <div class="e360-student-reschedule-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;padding:20px;">
@@ -2586,6 +2677,26 @@ function e360_course_schedule_box_html(int $course_id, int $uid): string {
             <div style="display:flex;justify-content:space-between;align-items:center;">
                 <div style="font-weight:700;">Request lesson reschedule</div>
                 <button type="button" class="e360-student-close tutor-iconic-btn"><span class="tutor-icon-times"></span></button>
+            </div>
+            <div style="margin-top:10px;">
+                <label style="display:block;font-weight:600;margin-bottom:6px;">Request type</label>
+                <select class="e360-student-request-type tutor-form-select">
+                    <option value="once">One-time lesson change</option>
+                    <option value="weekly">Weekly schedule change</option>
+                    <option value="add_lessons">Add lessons at new time</option>
+                </select>
+            </div>
+            <div class="e360-student-source-wrap" style="margin-top:10px;">
+                <label style="display:block;font-weight:600;margin-bottom:6px;">Lesson to change</label>
+                <select class="e360-student-source tutor-form-select">
+                    <option value="">Select lesson…</option>';
+        foreach ($source_opts as $op) {
+            $disabled = !empty($op['disabled']) ? ' disabled' : '';
+            $title = !empty($op['disabled']) ? ' (less than 24h)' : '';
+            $out .= '<option value="' . (int)$op['ts'] . '"' . $disabled . '>' . esc_html((string)$op['label'] . $title) . '</option>';
+        }
+        $out .= '</select>
+                <div style="font-size:12px;opacity:.7;margin-top:4px;">Lessons with less than 24 hours left cannot be changed.</div>
             </div>
             <div style="margin-top:10px;">
                 <label style="display:block;font-weight:600;margin-bottom:6px;">Date</label>
@@ -2619,6 +2730,9 @@ function e360_course_schedule_box_html(int $course_id, int $uid): string {
             var dateEl = box.querySelector(".e360-student-date");
             var availableEl = box.querySelector(".e360-student-available");
             var timeEl = box.querySelector(".e360-student-time");
+            var requestTypeEl = box.querySelector(".e360-student-request-type");
+            var sourceWrapEl = box.querySelector(".e360-student-source-wrap");
+            var sourceEl = box.querySelector(".e360-student-source");
             var reasonEl = box.querySelector(".e360-student-reason");
             var sendBtn = box.querySelector(".e360-student-send");
             var msgEl = box.querySelector(".e360-student-reschedule-msg");
@@ -2631,6 +2745,11 @@ function e360_course_schedule_box_html(int $course_id, int $uid): string {
 
             function setMsg(t){ if(msgEl) msgEl.textContent = t||""; }
             function setModalMsg(t){ if(modalMsg) modalMsg.textContent = t||""; }
+            function toggleSourceVisibility(){
+                if (!requestTypeEl || !sourceWrapEl) return;
+                var t = requestTypeEl.value || "once";
+                sourceWrapEl.style.display = (t === "add_lessons") ? "none" : "";
+            }
             function syncTutorSelectUi(selectEl){
                 if (!selectEl) return;
                 var wrap = selectEl.parentElement ? selectEl.parentElement.querySelector(".tutor-js-form-select") : null;
@@ -2789,6 +2908,7 @@ function e360_course_schedule_box_html(int $course_id, int $uid): string {
             if (openBtn) openBtn.addEventListener("click", function(){
                 modal.style.display="block";
                 setModalMsg("");
+                toggleSourceVisibility();
                 loadAvailableDates();
             });
             if (closeBtn) closeBtn.addEventListener("click", function(){ modal.style.display="none"; });
@@ -2802,18 +2922,26 @@ function e360_course_schedule_box_html(int $course_id, int $uid): string {
                 }
                 loadSlotsForDate(date);
             });
+            if (requestTypeEl) requestTypeEl.addEventListener("change", function(){
+                toggleSourceVisibility();
+            });
 
             if (sendBtn) sendBtn.addEventListener("click", function(){
+                var requestType = (requestTypeEl && requestTypeEl.value) ? requestTypeEl.value : "once";
+                var sourceTs = (sourceEl && sourceEl.value) ? sourceEl.value : "";
                 var date = (dateEl && dateEl.value) ? dateEl.value : "";
                 var time = (timeEl && timeEl.value) ? timeEl.value : "";
                 var reason = (reasonEl && reasonEl.value) ? reasonEl.value : "";
                 if (!date || !time){ setModalMsg("Select date and time"); return; }
                 if (!reason.trim()){ setModalMsg("Please provide reason"); return; }
+                if (requestType !== "add_lessons" && !sourceTs){ setModalMsg("Select lesson to change"); return; }
                 setModalMsg("Sending…");
                 post({
                     action:"e360_student_request_reschedule",
                     nonce: box.getAttribute("data-req-nonce") || "",
                     booking_id: bookingId,
+                    request_type: requestType,
+                    source_ts_utc: sourceTs,
                     date: date,
                     time: time,
                     reason: reason
