@@ -7,3 +7,78 @@
  Template:     ellen
  Version:      2.6
 */
+.navbar .others-option{
+    display: none !important;
+}
+
+body .page-title-area {
+    background-color: #4e92ff;
+
+  background-image: none;
+    background-repeat: no-repeat;
+    background-position: right 40px center; /* отступ справа */
+    background-size: auto 70%; /* или contain / 300px */
+}
+.e360-banner {
+    background-color: #4e92ff;
+    border-radius: 14px;
+    padding: 36px 24px 32px;
+    text-align: center;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.e360-banner-image {
+    max-width: 340px;
+    width: 100%;
+    margin-bottom: 22px;
+}
+.page-title-content ul li a, .page-title-content ul li::before{
+    color: #21225F;
+}
+.page-title-content ul li a:hover, .page-title-content ul li::before:hover{
+    color: #000;
+}
+.page-title-content h1{
+    font-size: 65px;
+}
+.popover-quickview .btn-box .default-btn{
+    padding-left: 25px;
+    padding-right: 25px;
+}
+/* CTA button */
+.e360-cta {
+    background-color: #ff9700 !important;
+    border-color: #ff9700 !important;
+    color: #fff !important;
+
+    padding: 14px 32px !important;
+    font-size: 16px !important;
+    font-weight: 600;
+
+    border-radius: 8px;
+}
+
+/* hover */
+.e360-cta:hover {
+    background-color: #e68600 !important;
+    border-color: #e68600 !important;
+}
+
+/* mobile */
+@media (max-width: 768px) {
+    .e360-banner {
+        padding: 26px 16px;
+    }
+
+    .e360-banner-image {
+        max-width: 240px;
+    }
+
+    .e360-cta {
+        width: 100%;
+        max-width: 260px;
+    }
+}

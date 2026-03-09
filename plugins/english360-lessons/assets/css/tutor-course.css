@@ -20,3 +20,24 @@
 .popover-quickview-courses a.default-btn i {
     display: none !important;
 }
+
+.single-courses-box .image {
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+}
+
+.single-courses-box .image img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+}
+
+.tutor-card-body.e360-booking-cta-ready .tutor-subscription-plans {
+    display: none !important;
+}
+
+.courses-details-info .tutor-subscription-plans {
+    display: none !important;
+}

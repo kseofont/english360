@@ -1,9 +1,18 @@
 <?php
 
-function ellen_enqueue_style() {
-    wp_enqueue_style( "parent-style" , get_parent_theme_file_uri( "/style.css" ) );
-}
-add_action( 'wp_enqueue_scripts', 'ellen_enqueue_style' );
+add_action('wp_enqueue_scripts', function () {
+    // Parent theme enqueues 'ellen-style' with get_stylesheet_uri(), which points to child style
+    // when a child theme is active. Re-register it with filemtime version for deterministic caching.
+    wp_dequeue_style('ellen-style');
+    wp_deregister_style('ellen-style');
+
+    $child_style_path = get_stylesheet_directory() . '/style.css';
+    $child_style_ver = file_exists($child_style_path) ? (string) filemtime($child_style_path) : null;
+    wp_register_style('ellen-style', get_stylesheet_uri(), [], $child_style_ver);
+    wp_enqueue_style('ellen-style');
+}, 100);
+
+
 
 add_action('show_user_profile', 'technical_admin_type_field');
 add_action('edit_user_profile', 'technical_admin_type_field');

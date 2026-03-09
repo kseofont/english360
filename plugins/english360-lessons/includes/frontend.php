@@ -1,6 +1,24 @@
 <?php
 defined('ABSPATH') || exit;
 
+add_action('template_redirect', function () {
+    if (!is_singular(['courses', 'tutor_course'])) {
+        return;
+    }
+
+    if (!defined('DONOTCACHEPAGE')) {
+        define('DONOTCACHEPAGE', true);
+    }
+    if (!defined('DONOTCACHEOBJECT')) {
+        define('DONOTCACHEOBJECT', true);
+    }
+    if (!defined('DONOTCACHEDB')) {
+        define('DONOTCACHEDB', true);
+    }
+
+    nocache_headers();
+}, 0);
+
 function e360_course_placeholder_image_url(): string {
     return 'https://lms.english360.ca/wp-content/uploads/2026/02/course-placeholder-english360.png';
 }
@@ -54,17 +72,20 @@ add_filter('post_thumbnail_html', function ($html, $post_id, $post_thumbnail_id,
     );
 }, 10, 5);
 
-function e360_page_has_shortcode(string $tag): bool {
-    if (!is_singular()) {
-        return false;
+function e360_course_booking_url(int $course_id): string {
+    $args = [
+        'course_id' => $course_id,
+    ];
+    if (function_exists('e360_booking_prefill_from_course')) {
+        $prefill = e360_booking_prefill_from_course($course_id, 'course-category');
+        if (!empty($prefill['language_term_id'])) {
+            $args['language_term_id'] = (int) $prefill['language_term_id'];
+        }
+        if (!empty($prefill['level_term_id'])) {
+            $args['level_term_id'] = (int) $prefill['level_term_id'];
+        }
     }
-
-    $post = get_post();
-    if (!$post instanceof WP_Post) {
-        return false;
-    }
-
-    return has_shortcode((string) $post->post_content, $tag);
+    return add_query_arg($args, home_url('/booking/'));
 }
 
 add_action('wp_enqueue_scripts', function () {
@@ -75,7 +96,7 @@ add_action('wp_enqueue_scripts', function () {
         'e360-tutor-course-frontend',
         E360_LESSONS_URL . 'assets/css/tutor-course.css',
         [],
-        '0.1.0'
+        '0.1.1'
     );
 });
 
@@ -136,6 +157,93 @@ add_action('wp_footer', function () {
         });
     });
 
+    observer.observe(document.body, { childList: true, subtree: true });
+})();
+</script>
+<?php
+});
+
+add_action('wp_footer', function () {
+    if (is_admin()) {
+        return;
+    }
+
+    $course_id = is_singular(['courses', 'tutor_course']) ? (int) get_the_ID() : 0;
+    $booking_url = $course_id > 0 ? e360_course_booking_url($course_id) : home_url('/booking/');
+    ?>
+<script id="e360-course-sidebar-booking-cta">
+(function() {
+    var defaultBookingUrl = <?php echo wp_json_encode($booking_url); ?>;
+
+    function extractCourseId(scope) {
+        if (!scope) return 0;
+        var link = scope.querySelector('a[href*="course_id="]');
+        if (!link) return 0;
+        try {
+            var url = new URL(link.href, window.location.origin);
+            return parseInt(url.searchParams.get('course_id') || '0', 10) || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    function buildBookingUrl(courseId) {
+        try {
+            var url = new URL(defaultBookingUrl, window.location.origin);
+            if (courseId > 0) {
+                url.searchParams.set('course_id', String(courseId));
+            }
+            return url.toString();
+        } catch (e) {
+            return defaultBookingUrl;
+        }
+    }
+
+    function ensureCta(cardBody, courseId) {
+        if (!cardBody) return;
+        cardBody.classList.add('e360-booking-cta-ready');
+        var cta = cardBody.querySelector('.e360-course-booking-cta');
+        if (!cta) {
+            cta = document.createElement('div');
+            cta.className = 'e360-course-booking-cta tutor-mt-20';
+
+            var link = document.createElement('a');
+            link.className = 'tutor-btn tutor-btn-primary tutor-btn-lg tutor-btn-block';
+            link.textContent = 'Book Lesson';
+            cta.appendChild(link);
+            cardBody.appendChild(cta);
+        }
+
+        var ctaLink = cta.querySelector('a');
+        if (ctaLink) {
+            ctaLink.href = buildBookingUrl(courseId);
+        }
+    }
+
+    function replacePlans() {
+        var plansList = document.querySelectorAll('.tutor-subscription-plans');
+        if (!plansList.length) return;
+
+        plansList.forEach(function(plans) {
+            var cardBody = plans.closest('.tutor-card-body');
+            if (!cardBody) return;
+
+            var courseId = extractCourseId(plans) || <?php echo (int) $course_id; ?>;
+            ensureCta(cardBody, courseId);
+
+            if (!plans.dataset.e360Processed) {
+                plans.dataset.e360Processed = '1';
+                plans.classList.add('e360-hidden-by-e360');
+                plans.style.display = 'none';
+            }
+        });
+    }
+
+    replacePlans();
+
+    var observer = new MutationObserver(function() {
+        replacePlans();
+    });
     observer.observe(document.body, { childList: true, subtree: true });
 })();
 </script>
