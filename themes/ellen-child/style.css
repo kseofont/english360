@@ -18,6 +18,7 @@ body .page-title-area {
     background-repeat: no-repeat;
     background-position: right 40px center; /* отступ справа */
     background-size: auto 70%; /* или contain / 300px */
+        padding: 50px 0;
 }
 .e360-banner {
     background-color: #4e92ff;
@@ -66,7 +67,12 @@ body .page-title-area {
     background-color: #e68600 !important;
     border-color: #e68600 !important;
 }
-
+#e360-reg-actions .e360-booking-login-btn {
+    display: block;
+    width: 200px;
+    margin: 0 auto;
+    text-align: center;
+}
 /* mobile */
 @media (max-width: 768px) {
     .e360-banner {

@@ -12,6 +12,123 @@ add_action('wp_enqueue_scripts', function () {
     wp_enqueue_style('ellen-style');
 }, 100);
 
+add_action('wp_enqueue_scripts', function () {
+    if (is_admin() || !is_user_logged_in()) {
+        return;
+    }
+
+    $request_uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+    if (strpos($request_uri, '/dashboard/zoom/set-api/') === false) {
+        return;
+    }
+
+    if (!current_user_can('manage_options') && !current_user_can('tutor_instructor') && !is_super_admin()) {
+        $user = wp_get_current_user();
+        $roles = $user instanceof WP_User ? (array) $user->roles : [];
+        if (!in_array('administrator', $roles, true) && !in_array('super_admin', $roles, true)) {
+            return;
+        }
+    }
+
+    $zoom_api = get_option('tutor_zoom_api', []);
+    if (!is_array($zoom_api)) {
+        return;
+    }
+
+    $account_id = sanitize_text_field((string) ($zoom_api['account_id'] ?? ''));
+    $api_key = sanitize_text_field((string) ($zoom_api['api_key'] ?? ''));
+    $api_secret = sanitize_text_field((string) ($zoom_api['api_secret'] ?? ''));
+    if ($account_id === '' || $api_key === '' || $api_secret === '') {
+        return;
+    }
+
+    $js = <<<JS
+(function() {
+    var creds = {
+        account_id: %s,
+        api_key: %s,
+        api_secret: %s
+    };
+
+    function maskValue(value) {
+        value = String(value || '');
+        if (value.length <= 8) {
+            return value.length ? value.charAt(0) + '*'.repeat(Math.max(value.length - 2, 0)) + value.slice(-1) : '';
+        }
+        return value.slice(0, 4) + '*'.repeat(value.length - 8) + value.slice(-4);
+    }
+
+    function applySync() {
+        var form = document.querySelector('#tutor-zoom-settings');
+        if (!form) return;
+
+        var accountField = form.querySelector('[name="tutor_zoom_api[account_id]"]');
+        var keyField = form.querySelector('[name="tutor_zoom_api[api_key]"]');
+        var secretField = form.querySelector('[name="tutor_zoom_api[api_secret]"]');
+        var submitButton = form.querySelector('button[type="submit"], input[type="submit"]');
+        if (!accountField || !keyField || !secretField) return;
+
+        var notice = document.querySelector('.e360-zoom-sync-notice');
+        if (!notice) {
+            notice = document.createElement('div');
+            notice.className = 'tutor-alert tutor-alert-success e360-zoom-sync-notice';
+            notice.style.marginBottom = '16px';
+            notice.textContent = 'Zoom credentials are synced from site settings. Values are masked for security.';
+            form.parentNode.insertBefore(notice, form);
+        }
+
+        var wasEmpty = !accountField.value.trim() && !keyField.value.trim() && !secretField.value.trim();
+
+        accountField.setAttribute('data-e360-real-value', creds.account_id);
+        keyField.setAttribute('data-e360-real-value', creds.api_key);
+        secretField.setAttribute('data-e360-real-value', creds.api_secret);
+
+        accountField.value = maskValue(creds.account_id);
+        keyField.value = maskValue(creds.api_key);
+        secretField.value = maskValue(creds.api_secret);
+
+        if (form.dataset.e360ZoomRestoreBound !== '1') {
+            form.dataset.e360ZoomRestoreBound = '1';
+            form.addEventListener('submit', function() {
+                accountField.value = accountField.getAttribute('data-e360-real-value') || '';
+                keyField.value = keyField.getAttribute('data-e360-real-value') || '';
+                secretField.value = secretField.getAttribute('data-e360-real-value') || '';
+            });
+        }
+
+        if (!wasEmpty || !submitButton) return;
+
+        var autosaveKey = 'e360ThemeZoomAutosave:' + window.location.pathname;
+        if (window.sessionStorage && sessionStorage.getItem(autosaveKey) === '1') {
+            return;
+        }
+        if (window.sessionStorage) {
+            sessionStorage.setItem(autosaveKey, '1');
+        }
+
+        window.setTimeout(function() {
+            submitButton.click();
+        }, 250);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applySync);
+    } else {
+        applySync();
+    }
+})();
+JS;
+
+    $js = sprintf(
+        $js,
+        wp_json_encode($account_id),
+        wp_json_encode($api_key),
+        wp_json_encode($api_secret)
+    );
+
+    wp_add_inline_script('tutor_zoom_frontend_js-js', $js, 'after');
+}, 200);
+
 
 
 add_action('show_user_profile', 'technical_admin_type_field');
@@ -136,3 +253,139 @@ add_action('wp', function () {
         }
     }
 }, 1);
+
+function e360_theme_can_sync_tutor_zoom_api(): bool {
+    if (!is_user_logged_in()) {
+        return false;
+    }
+
+    if (current_user_can('manage_options') || current_user_can('tutor_instructor') || is_super_admin()) {
+        return true;
+    }
+
+    $user = wp_get_current_user();
+    $roles = $user instanceof WP_User ? (array) $user->roles : [];
+
+    return in_array('super_admin', $roles, true) || in_array('administrator', $roles, true);
+}
+
+function e360_theme_is_zoom_api_route(): bool {
+    $request_uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+    return strpos($request_uri, '/dashboard/zoom/set-api/') !== false;
+}
+
+add_action('template_redirect', function () {
+    if (is_admin() || !e360_theme_is_zoom_api_route()) {
+        return;
+    }
+
+    if (!defined('DONOTCACHEPAGE')) define('DONOTCACHEPAGE', true);
+    if (!defined('DONOTCACHEOBJECT')) define('DONOTCACHEOBJECT', true);
+    if (!defined('DONOTCACHEDB')) define('DONOTCACHEDB', true);
+    nocache_headers();
+}, 0);
+
+function e360_theme_output_zoom_api_sync(): void {
+    static $printed = false;
+    if ($printed || is_admin() || !e360_theme_can_sync_tutor_zoom_api() || !e360_theme_is_zoom_api_route()) {
+        return;
+    }
+
+    $zoom_api = get_option('tutor_zoom_api', []);
+    if (!is_array($zoom_api)) {
+        return;
+    }
+
+    $account_id = sanitize_text_field((string) ($zoom_api['account_id'] ?? ''));
+    $api_key = sanitize_text_field((string) ($zoom_api['api_key'] ?? ''));
+    $api_secret = sanitize_text_field((string) ($zoom_api['api_secret'] ?? ''));
+
+    if ($account_id === '' || $api_key === '' || $api_secret === '') {
+        return;
+    }
+
+    $printed = true;
+    ?>
+<script id="e360-theme-zoom-api-sync">
+(function() {
+    var creds = {
+        account_id: <?php echo wp_json_encode($account_id); ?>,
+        api_key: <?php echo wp_json_encode($api_key); ?>,
+        api_secret: <?php echo wp_json_encode($api_secret); ?>
+    };
+
+    function maskValue(value) {
+        value = String(value || '');
+        if (value.length <= 8) {
+            return value.length ? value.charAt(0) + '*'.repeat(Math.max(value.length - 2, 0)) + value.slice(-1) : '';
+        }
+        return value.slice(0, 4) + '*'.repeat(value.length - 8) + value.slice(-4);
+    }
+
+    function applySync() {
+        var form = document.querySelector('#tutor-zoom-settings');
+        if (!form) return;
+
+        var accountField = form.querySelector('[name="tutor_zoom_api[account_id]"]');
+        var keyField = form.querySelector('[name="tutor_zoom_api[api_key]"]');
+        var secretField = form.querySelector('[name="tutor_zoom_api[api_secret]"]');
+        var submitButton = form.querySelector('button[type="submit"], input[type="submit"]');
+
+        if (!accountField || !keyField || !secretField) return;
+
+        var notice = document.querySelector('.e360-zoom-sync-notice');
+        if (!notice) {
+            notice = document.createElement('div');
+            notice.className = 'tutor-alert tutor-alert-success e360-zoom-sync-notice';
+            notice.style.marginBottom = '16px';
+            notice.textContent = 'Zoom credentials are synced from site settings. Values are masked for security.';
+            form.parentNode.insertBefore(notice, form);
+        }
+
+        var wasEmpty = !accountField.value.trim() && !keyField.value.trim() && !secretField.value.trim();
+
+        accountField.setAttribute('data-e360-real-value', creds.account_id);
+        keyField.setAttribute('data-e360-real-value', creds.api_key);
+        secretField.setAttribute('data-e360-real-value', creds.api_secret);
+
+        accountField.value = maskValue(creds.account_id);
+        keyField.value = maskValue(creds.api_key);
+        secretField.value = maskValue(creds.api_secret);
+
+        if (form.dataset.e360ZoomRestoreBound !== '1') {
+            form.dataset.e360ZoomRestoreBound = '1';
+            form.addEventListener('submit', function() {
+                accountField.value = accountField.getAttribute('data-e360-real-value') || '';
+                keyField.value = keyField.getAttribute('data-e360-real-value') || '';
+                secretField.value = secretField.getAttribute('data-e360-real-value') || '';
+            });
+        }
+
+        if (!wasEmpty || !submitButton) return;
+
+        var autosaveKey = 'e360ThemeZoomAutosave:' + window.location.pathname;
+        if (window.sessionStorage && sessionStorage.getItem(autosaveKey) === '1') {
+            return;
+        }
+
+        if (window.sessionStorage) {
+            sessionStorage.setItem(autosaveKey, '1');
+        }
+
+        window.setTimeout(function() {
+            submitButton.click();
+        }, 250);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applySync);
+    } else {
+        applySync();
+    }
+})();
+</script>
+<?php
+}
+
+add_action('wp_head', 'e360_theme_output_zoom_api_sync', 99);
+add_action('wp_footer', 'e360_theme_output_zoom_api_sync', 99);

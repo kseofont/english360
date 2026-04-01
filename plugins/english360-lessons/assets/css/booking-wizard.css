@@ -4,6 +4,7 @@
 
 .e360-booking-wizard-area {
     padding: 32px 0 80px;
+    min-height: 100vh;
 }
 
 #e360-wizard .e360-step-title {
@@ -17,57 +18,248 @@
     margin-bottom: 80px;
 }
 
-#e360-wizard .e360-language-card,
-#e360-wizard .e360-level-card,
-#e360-wizard .e360-course-card {
-    border: 1px solid #ddd;
-    border-radius: 10px;
-    cursor: pointer;
-    overflow: hidden;
+#e360-wizard .e360-other-language-form-wrap {
+    max-width: 760px;
+    margin: 0 auto 80px;
+    padding: 24px;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
     background: #fff;
+}
+
+#e360-wizard .e360-other-language-placeholder {
+    color: #555;
+    line-height: 1.6;
+}
+
+#e360-wizard .e360-choice-card {
+    cursor: pointer;
+    height: 100%;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+#e360-wizard .e360-language-card-row {
     display: flex;
-    flex-direction: column;
-    min-height: 100%;
+    align-items: center;
+    gap: 16px;
+    min-height: 112px;
+    padding: 18px 20px;
+    border: 1px solid #d9d9d9;
+    border-radius: 14px;
+    background: #fff;
 }
 
-#e360-wizard .e360-level-card,
-#e360-wizard .e360-course-card {
-    border-radius: 8px;
+#e360-wizard .e360-language-thumb {
+    width: 56px;
+    height: 56px;
+    flex: 0 0 56px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #f3f4f6;
 }
 
-#e360-wizard .e360-card-media {
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #f4f4f4;
-}
-
-#e360-wizard .e360-card-media img {
+#e360-wizard .e360-language-thumb img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
 }
 
-#e360-wizard .e360-card-body {
-    padding: 10px 12px 12px;
+#e360-wizard .e360-language-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-top: 0;
 }
 
-#e360-wizard .e360-card-title {
-    font-weight: 600;
-    line-height: 1.3;
+#e360-wizard .e360-language-card-row .content h3 {
+    margin: 0 0 4px;
+    padding-left: 0;
 }
 
-#e360-wizard .e360-language-card.e360-language-selected,
+#e360-wizard .e360-language-count {
+    color: #6b7280;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+#e360-wizard .e360-language-arrow {
+    flex: 0 0 auto;
+    color: #111827;
+    font-size: 28px;
+    line-height: 1;
+}
+
+#e360-wizard .e360-choice-card .image {
+    aspect-ratio: 16 / 10;
+}
+
+#e360-wizard .e360-choice-card .image img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+}
+
+#e360-wizard .e360-choice-card .image .link-btn {
+    cursor: pointer;
+}
+
+#e360-wizard .e360-level-card,
+#e360-wizard .e360-course-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 112px;
+    padding: 18px 20px;
+    border: 1px solid #d9d9d9;
+    border-radius: 14px;
+    background: #fff;
+}
+
+#e360-wizard .e360-level-card .image,
+#e360-wizard .e360-course-card .image {
+    width: 56px;
+    height: 56px;
+    flex: 0 0 56px;
+    aspect-ratio: auto;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #f3f4f6;
+}
+
+#e360-wizard .e360-level-card .image::before,
+#e360-wizard .e360-level-card .image::after,
+#e360-wizard .e360-level-card .image .link-btn::before,
+#e360-wizard .e360-course-card .image::before,
+#e360-wizard .e360-course-card .image::after,
+#e360-wizard .e360-course-card .image .link-btn::before {
+    display: none !important;
+}
+
+#e360-wizard .e360-level-card .content,
+#e360-wizard .e360-course-card .content {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-top: 0;
+}
+
+#e360-wizard .e360-level-card .content h3,
+#e360-wizard .e360-course-card .content h3 {
+    margin: 0;
+    padding-left: 0;
+}
+
+#e360-wizard .e360-choice-arrow {
+    flex: 0 0 auto;
+    color: #111827;
+    font-size: 28px;
+    line-height: 1;
+}
+
+#e360-wizard .e360-choice-card .content {
+    margin-top: 20px;
+}
+
+#e360-wizard .e360-choice-card .content h3 {
+    margin-bottom: 0;
+    padding-left: 20px;
+}
+
+#e360-wizard .e360-choice-card.e360-level-card .content,
+#e360-wizard .e360-choice-card.e360-course-card .content {
+    margin-top: 0;
+}
+
+#e360-wizard .e360-choice-card.e360-level-card .content h3,
+#e360-wizard .e360-choice-card.e360-course-card .content h3 {
+    padding-left: 0;
+}
+
+#e360-wizard .e360-choice-card .content h3 span {
+    color: var(--blackColor);
+    transition: color 0.3s ease;
+}
+
+#e360-wizard .e360-choice-card:hover .content h3 span {
+    color: #6B48FF;
+}
+
+#e360-wizard .e360-choice-card.e360-language-selected,
+#e360-wizard .e360-choice-card.e360-level-selected,
+#e360-wizard .e360-choice-card.e360-course-selected {
+    transform: translateY(-4px);
+}
+
+#e360-wizard .e360-language-card-row.e360-language-selected {
+    border-color: #3e64de;
+    box-shadow: 0 0 0 2px rgba(62, 100, 222, 0.18);
+}
+
+#e360-wizard .e360-language-card-row:hover {
+    border-color: #3e64de;
+}
+
+#e360-wizard .e360-level-card:hover,
+#e360-wizard .e360-course-card:hover {
+    border-color: #3e64de;
+}
+
 #e360-wizard .e360-level-card.e360-level-selected,
 #e360-wizard .e360-course-card.e360-course-selected {
     border-color: #3e64de;
-    box-shadow: 0 0 0 2px rgba(62, 100, 222, 0.28), 0 14px 26px -18px rgba(31, 63, 180, 0.7);
-    background: linear-gradient(180deg, #ffffff 0%, #f6f9ff 100%);
-    transform: translateY(-2px);
+    box-shadow: 0 0 0 2px rgba(62, 100, 222, 0.18);
+}
+
+#e360-wizard .e360-choice-card.e360-language-selected .image .link-btn::before,
+#e360-wizard .e360-choice-card.e360-level-selected .image .link-btn::before,
+#e360-wizard .e360-choice-card.e360-course-selected .image .link-btn::before {
+    opacity: 0.18;
+    visibility: visible;
+}
+
+#e360-wizard .e360-choice-card.e360-language-selected .image::before,
+#e360-wizard .e360-choice-card.e360-level-selected .image::before,
+#e360-wizard .e360-choice-card.e360-course-selected .image::before {
+    right: 0;
+    opacity: 1;
+    visibility: visible;
+}
+
+#e360-wizard .e360-choice-card.e360-language-selected .image::after,
+#e360-wizard .e360-choice-card.e360-level-selected .image::after,
+#e360-wizard .e360-choice-card.e360-course-selected .image::after {
+    opacity: 1;
+    margin-top: 0;
+    visibility: visible;
+}
+
+#e360-wizard .e360-choice-card.e360-language-selected .content h3 span,
+#e360-wizard .e360-choice-card.e360-level-selected .content h3 span,
+#e360-wizard .e360-choice-card.e360-course-selected .content h3 span {
+    color: #6B48FF;
 }
 
 #e360-wizard .e360-teacher-card.e360-teacher-selected {
     border-color: #3e64de;
+    box-shadow: 0 0 0 2px rgba(62, 100, 222, 0.18);
+}
+
+#e360-wizard .e360-validation-error {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.18) !important;
+}
+
+#e360-wizard .e360-validation-error-section {
+    border: 1px solid #dc3545;
+    border-radius: 12px;
+    padding: 12px;
+}
+
+#e360-wizard .e360-teachers {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
 }
 
 #e360-wizard .e360-teacher-schedule {
@@ -78,10 +270,33 @@
 #e360-wizard .e360-teacher-schedule .e360-day-card {
     min-height: 92px;
 }
+.wpcf7-form input{
+    width: 100%;
+}
+.wpcf7-form label, .wpcf7-form select{
+        display: flex;
+    flex-direction: column;
+}
 
 @media (max-width: 991px) {
     .e360-booking-wizard-area {
         padding: 24px 0 56px;
+        min-height: 100vh;
+    }
+
+    #e360-wizard .e360-language-card-row {
+        min-height: 96px;
+        padding: 16px;
+    }
+
+    #e360-wizard .e360-level-card,
+    #e360-wizard .e360-course-card {
+        min-height: 96px;
+        padding: 16px;
+    }
+
+    #e360-wizard .e360-teachers {
+        grid-template-columns: 1fr;
     }
 
     #e360-wizard .e360-teacher-schedule .e360-days-grid {
