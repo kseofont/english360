@@ -363,6 +363,28 @@ function e360_get_course_instructor_ids(int $course_id): array {
     return $ids;
 }
 
+function e360_teacher_is_bookable_for_wizard(int $user_id): bool {
+    if ($user_id <= 0) {
+        return false;
+    }
+
+    if (user_can($user_id, 'manage_options')) {
+        return true;
+    }
+
+    $status = sanitize_key((string) get_user_meta($user_id, '_tutor_instructor_status', true));
+    if ($status !== '') {
+        return $status === 'approved';
+    }
+
+    $is_instructor = user_can($user_id, 'tutor_instructor') || (bool) get_user_meta($user_id, '_is_tutor_instructor', true);
+    if ($is_instructor) {
+        return false;
+    }
+
+    return true;
+}
+
 /**
  * Полный HTML bio из Tutor профиля.
  * Разрешаем базовый HTML + iframe ТОЛЬКО с youtube доменов.
@@ -530,6 +552,7 @@ function e360_get_courses_by_term() {
             $variant_key = $course_post_id . ':' . $tid;
             if (isset($groups[$key]['_seen'][$variant_key])) continue;
             $groups[$key]['_seen'][$variant_key] = 1;
+            if (!e360_teacher_is_bookable_for_wizard($tid)) continue;
 
             $u = get_user_by('id', $tid);
             if (!$u) continue;
@@ -1500,6 +1523,20 @@ jQuery(function($) {
         );
     }
 
+    function renderNoTeacherCard(message) {
+        return (
+            `<div class="e360-teachers">` +
+            `<div class="e360-teacher-card e360-teacher-selected e360-teacher-card-empty">` +
+            `<div class="e360-teacher-main">` +
+            `<div class="e360-teacher-info">` +
+            `<div class="e360-teacher-name">${escapeHtml(message)}</div>` +
+            `</div>` +
+            `</div>` +
+            `</div>` +
+            `</div>`
+        );
+    }
+
     function loadLevels(languageTermId) {
         resetAfterLevel();
         $('#e360-step-level').show();
@@ -1724,7 +1761,8 @@ jQuery(function($) {
 
         const group = coursesIndex[courseKey];
         if (!group || !group.variants || !group.variants.length) {
-            $('#e360-teacher-list').html('<div>No teachers found for this course.</div>');
+            $('#e360-teacher-list').html(renderNoTeacherCard("Sorry, that course doesn't have any teacher now."));
+            scrollElementIntoView('#e360-teacher-list', 24);
             return;
         }
 
@@ -1803,6 +1841,9 @@ jQuery(function($) {
 
         // card click = select teacher
         $(document).off('click.e360card').on('click.e360card', '.e360-teacher-card', function() {
+            if ($(this).hasClass('e360-teacher-card-empty')) {
+                return;
+            }
             clearValidationErrors();
             $('.e360-teacher-card').removeClass('e360-teacher-selected');
             $(this).addClass('e360-teacher-selected');

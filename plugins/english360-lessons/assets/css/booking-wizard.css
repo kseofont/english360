@@ -245,6 +245,26 @@
     box-shadow: 0 0 0 2px rgba(62, 100, 222, 0.18);
 }
 
+#e360-wizard .e360-teacher-card-empty {
+    cursor: default;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: #fff;
+}
+
+#e360-wizard .e360-teacher-card-empty .e360-teacher-main,
+#e360-wizard .e360-teacher-card-empty .e360-teacher-info {
+    width: 100%;
+}
+
+#e360-wizard .e360-teacher-card-empty .e360-teacher-name {
+    font-size: 18px;
+    line-height: 1.5;
+}
+
 #e360-wizard .e360-validation-error {
     border-color: #dc3545 !important;
     box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.18) !important;
