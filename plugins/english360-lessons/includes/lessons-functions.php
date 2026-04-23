@@ -310,6 +310,9 @@ if (class_exists('\Tutor\Models\LessonModel')) {
     $bal  = e360_get_credits_balance($student_id, $course_id);
     $used = e360_get_credits_used($student_id, $course_id);
 
+    if (function_exists('e360_mark_matching_program_session_completed')) {
+        e360_mark_matching_program_session_completed($student_id, $course_id, $teacher_id, $lesson_id);
+    }
 
     wp_send_json_success([
         'message' => 'Marked completed.',

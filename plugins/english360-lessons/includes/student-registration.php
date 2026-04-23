@@ -379,7 +379,9 @@ function e360_teacher_is_bookable_for_wizard(int $user_id): bool {
 
     $is_instructor = user_can($user_id, 'tutor_instructor') || (bool) get_user_meta($user_id, '_is_tutor_instructor', true);
     if ($is_instructor) {
-        return false;
+        // Some instructors do not have explicit status meta saved yet.
+        // In that case treat them as available instead of silently hiding them.
+        return true;
     }
 
     return true;
@@ -437,6 +439,141 @@ function e360_teacher_bio_snippet(int $user_id, int $limit = 140): string {
     if ($bio === '') return '';
     if (mb_strlen($bio) > $limit) $bio = mb_substr($bio, 0, $limit - 1) . '…';
     return $bio;
+}
+
+function e360_get_teacher_profile_fields(int $user_id): array {
+    $headline = trim((string) get_user_meta($user_id, 'e360_teacher_headline', true));
+    $intro = trim((string) get_user_meta($user_id, 'e360_teacher_intro', true));
+    $country = trim((string) get_user_meta($user_id, 'e360_teacher_country', true));
+    $languages = trim((string) get_user_meta($user_id, 'e360_teacher_languages', true));
+    $price = trim((string) get_user_meta($user_id, 'e360_teacher_price', true));
+    $price_label = trim((string) get_user_meta($user_id, 'e360_teacher_price_label', true));
+    $badges = trim((string) get_user_meta($user_id, 'e360_teacher_badges', true));
+    $rating = trim((string) get_user_meta($user_id, 'e360_teacher_rating', true));
+    $intro_video = trim((string) get_user_meta($user_id, 'e360_teacher_intro_video', true));
+    $native_language = trim((string) get_user_meta($user_id, 'e360_teacher_native_language', true));
+    $featured = !empty(get_user_meta($user_id, 'e360_teacher_featured', true));
+
+    if ($intro === '') {
+        $intro = e360_teacher_bio_snippet($user_id, 180);
+    }
+
+    if ($price_label === '') {
+        $price_label = 'lesson';
+    }
+
+    return [
+        'headline'        => $headline,
+        'intro'           => $intro,
+        'country'         => $country,
+        'languages'       => $languages,
+        'price'           => $price,
+        'price_label'     => $price_label,
+        'badges'          => $badges,
+        'rating'          => $rating,
+        'intro_video'     => $intro_video,
+        'native_language' => $native_language,
+        'featured'        => $featured ? '1' : '',
+    ];
+}
+
+function e360_get_instructor_front_profile_fields_schema(): array {
+    return [
+        'e360_teacher_headline' => [
+            'label'       => 'Professional Headline',
+            'type'        => 'text',
+            'placeholder' => 'Certified English tutor for beginners and kids',
+        ],
+        'e360_teacher_intro' => [
+            'label'       => 'Short Intro',
+            'type'        => 'textarea',
+            'placeholder' => 'A short intro for your teacher card',
+        ],
+        'e360_teacher_country' => [
+            'label'       => 'Country',
+            'type'        => 'text',
+            'placeholder' => 'Portugal',
+        ],
+        'e360_teacher_languages' => [
+            'label'       => 'Languages Spoken',
+            'type'        => 'text',
+            'placeholder' => 'English (Native), Portuguese (B2)',
+        ],
+        'e360_teacher_native_language' => [
+            'label'       => 'Native Language',
+            'type'        => 'text',
+            'placeholder' => 'English',
+        ],
+        'e360_teacher_rating' => [
+            'label'       => 'Teacher Rating',
+            'type'        => 'number',
+            'placeholder' => '4.9',
+            'step'        => '0.1',
+            'min'         => '0',
+            'max'         => '5',
+        ],
+        'e360_teacher_price' => [
+            'label'       => 'Price per Lesson',
+            'type'        => 'number',
+            'placeholder' => '25',
+            'step'        => '0.01',
+            'min'         => '0',
+        ],
+        'e360_teacher_price_label' => [
+            'label'       => 'Price Label',
+            'type'        => 'text',
+            'placeholder' => '50-min lesson',
+        ],
+        'e360_teacher_badges' => [
+            'label'       => 'Badges',
+            'type'        => 'text',
+            'placeholder' => 'Professional, Kids specialist',
+        ],
+        'e360_teacher_intro_video' => [
+            'label'       => 'Intro Video URL',
+            'type'        => 'url',
+            'placeholder' => 'https://www.youtube.com/watch?v=...',
+        ],
+        'e360_teacher_featured' => [
+            'label' => 'Featured Tutor',
+            'type'  => 'checkbox',
+        ],
+    ];
+}
+
+function e360_teacher_intro_video_embed_url(string $url): string {
+    $url = trim($url);
+    if ($url === '') {
+        return '';
+    }
+
+    $parts = wp_parse_url($url);
+    if (!is_array($parts)) {
+        return '';
+    }
+
+    $host = strtolower((string) ($parts['host'] ?? ''));
+    $path = (string) ($parts['path'] ?? '');
+    parse_str((string) ($parts['query'] ?? ''), $query);
+
+    if (strpos($host, 'youtu.be') !== false) {
+        $video_id = trim($path, '/');
+        return $video_id !== '' ? 'https://www.youtube.com/embed/' . rawurlencode($video_id) : '';
+    }
+
+    if (strpos($host, 'youtube.com') !== false) {
+        $video_id = sanitize_text_field((string) ($query['v'] ?? ''));
+        if ($video_id === '' && preg_match('#/embed/([^/?]+)#', $path, $m)) {
+            $video_id = sanitize_text_field((string) ($m[1] ?? ''));
+        }
+        return $video_id !== '' ? 'https://www.youtube.com/embed/' . rawurlencode($video_id) : '';
+    }
+
+    if (strpos($host, 'vimeo.com') !== false && preg_match('#/(\d+)#', $path, $m)) {
+        return 'https://player.vimeo.com/video/' . rawurlencode((string) $m[1]);
+    }
+
+    return '';
 }
 
 
@@ -559,6 +696,18 @@ function e360_get_courses_by_term() {
 
             $bio_html = e360_teacher_bio_html($tid);
             $bio_snip = e360_teacher_bio_snippet($tid, 140);
+            $headline = trim((string) get_user_meta($tid, 'e360_teacher_headline', true));
+            $intro = trim((string) get_user_meta($tid, 'e360_teacher_intro', true));
+            $country = trim((string) get_user_meta($tid, 'e360_teacher_country', true));
+            $languages = trim((string) get_user_meta($tid, 'e360_teacher_languages', true));
+            $rating = trim((string) get_user_meta($tid, 'e360_teacher_rating', true));
+            $price = trim((string) get_user_meta($tid, 'e360_teacher_price', true));
+            $price_label = trim((string) get_user_meta($tid, 'e360_teacher_price_label', true));
+            $badges = trim((string) get_user_meta($tid, 'e360_teacher_badges', true));
+            $featured = (string) get_user_meta($tid, 'e360_teacher_featured', true) === '1';
+            $native_language = trim((string) get_user_meta($tid, 'e360_teacher_native_language', true));
+            $intro_video = trim((string) get_user_meta($tid, 'e360_teacher_intro_video', true));
+            $intro_video_embed = e360_teacher_intro_video_embed_url($intro_video);
 
             $groups[$key]['variants'][] = [
                 'course_id'        => $course_post_id,          // один и тот же course post
@@ -569,6 +718,18 @@ function e360_get_courses_by_term() {
                 'teacher_bio'      => $bio_snip,                // текстовое превью
                 'teacher_bio_html' => $bio_html,                // полный HTML (safe)
                 'teacher_role'     => ($tid === $author_id) ? 'Author' : 'Instructor',
+                'teacher_headline' => $headline,
+                'teacher_intro'    => $intro,
+                'teacher_country'  => $country,
+                'teacher_languages'=> $languages,
+                'teacher_rating'   => $rating,
+                'teacher_price'    => $price,
+                'teacher_price_label' => $price_label,
+                'teacher_badges'   => $badges,
+                'teacher_featured' => $featured ? 1 : 0,
+                'teacher_native_language' => $native_language,
+                'teacher_intro_video' => esc_url_raw($intro_video),
+                'teacher_intro_video_embed' => esc_url_raw($intro_video_embed),
             ];
         }
     }
@@ -675,7 +836,10 @@ function e360_get_schedule_preview_bulk() {
             ];
         }
 
-        $items[$tid] = ['days' => $out_days];
+        $items[$tid] = [
+            'days'     => $out_days,
+            'timezone' => $student_tz,
+        ];
     }
 
     wp_send_json_success(['items' => $items]);
@@ -1061,25 +1225,28 @@ add_shortcode('e360_booking_wizard', function($atts){
             </div>
 
             <div id="e360-step-offer" style="display:none;">
-                <p>
-                    <label>Choose format</label><br>
-                <div id="e360-purchase-options"
-                    style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
-                    <button type="button" class="e360-purchase-card tutor-btn tutor-btn-outline-primary"
-                        data-plan-kind="trial">Trial lesson</button>
-                    <button type="button" class="e360-purchase-card tutor-btn tutor-btn-outline-primary"
-                        data-plan-kind="package">Buy a package</button>
+                <div id="e360-offer-storage">
+                    <div id="e360-inline-offer-ui">
+                        <div style="margin-top:8px;">
+                            <label style="display:block;margin-bottom:8px;font-weight:600;">Choose format</label>
+                            <div id="e360-purchase-options"
+                                style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
+                                <button type="button" class="e360-purchase-card tutor-btn tutor-btn-outline-primary"
+                                    data-plan-kind="trial">Trial lesson</button>
+                                <button type="button" class="e360-purchase-card tutor-btn tutor-btn-outline-primary"
+                                    data-plan-kind="package">Buy a package</button>
+                            </div>
+                        </div>
+
+                        <div id="e360-plan-wrap" style="display:none;margin-top:12px;">
+                            <label style="display:block;margin-bottom:8px;">Choose package</label>
+                            <div id="e360-plan-options"
+                                style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;"></div>
+                        </div>
+
+                        <div id="e360-offer-msg" style="margin-top:10px;opacity:.85;"></div>
+                    </div>
                 </div>
-                </p>
-
-                <p id="e360-plan-wrap" style="display:none;">
-                    <label>Choose package</label><br>
-                    <select id="e360-plan">
-                        <option value="">Select…</option>
-                    </select>
-                </p>
-
-                <div id="e360-offer-msg" style="margin-top:10px;opacity:.85;"></div>
             </div>
 
             <div id="e360-step-time" style="display:none;">
@@ -1094,7 +1261,7 @@ add_shortcode('e360_booking_wizard', function($atts){
                         <option value="">Select date first…</option>
                     </select>
                 </p>
-                <p id="e360-repeat-wrap">
+                <p id="e360-repeat-wrap" style="display:none;">
                     <label>Lesson type</label><br>
                     <select id="e360-repeat">
                         <option value="weekly" selected>Weekly</option>
@@ -1109,6 +1276,26 @@ add_shortcode('e360_booking_wizard', function($atts){
                 <div id="e360-msg" style="margin-top:10px;"></div>
             </div>
         </div>
+    </div>
+</div>
+
+<div id="e360-teacher-video-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.58);z-index:99999;padding:20px;">
+    <div style="max-width:880px;margin:40px auto;background:#fff;border-radius:18px;padding:18px;position:relative;">
+        <button type="button" class="e360-teacher-video-close tutor-iconic-btn" style="position:absolute;top:12px;right:12px;"><span class="tutor-icon-times"></span></button>
+        <div style="padding-right:40px;">
+            <div id="e360-teacher-video-title" style="font-size:22px;font-weight:700;color:#0f1720;">Teacher intro video</div>
+        </div>
+        <div id="e360-teacher-video-content" style="margin-top:16px;"></div>
+    </div>
+</div>
+
+<div id="e360-teacher-schedule-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.58);z-index:99999;padding:20px;">
+    <div style="max-width:980px;margin:40px auto;background:#fff;border-radius:18px;padding:18px;position:relative;">
+        <button type="button" class="e360-teacher-schedule-close tutor-iconic-btn" style="position:absolute;top:12px;right:12px;"><span class="tutor-icon-times"></span></button>
+        <div style="padding-right:40px;">
+            <div id="e360-teacher-schedule-title" style="font-size:22px;font-weight:700;color:#0f1720;">Teacher schedule</div>
+        </div>
+        <div id="e360-teacher-schedule-content" style="margin-top:16px;"></div>
     </div>
 </div>
 
@@ -1143,6 +1330,10 @@ jQuery(function($) {
         slots: [],
     };
 
+    function escapeHtml(value) {
+        return $('<div>').text(value || '').html();
+    }
+
     function resetAfterLanguage() {
         // visually unselect any language cards
         $('.e360-language-card').removeClass('e360-language-selected');
@@ -1158,7 +1349,7 @@ jQuery(function($) {
         $('#e360-step-offer').hide();
         $('#e360-offer-msg').text('');
         $('#e360-plan-wrap').hide();
-        $('#e360-plan').html('<option value="">Select…</option>');
+        $('#e360-plan-options').html('');
         $('#e360-time').html('<option value="">Select date first…</option>');
         $('#e360-date').val('');
         $('#e360-step-level, #e360-step-course, #e360-step-offer, #e360-step-time').hide();
@@ -1181,7 +1372,7 @@ jQuery(function($) {
         $('#e360-step-offer').hide();
         $('#e360-offer-msg').text('');
         $('#e360-plan-wrap').hide();
-        $('#e360-plan').html('<option value="">Select…</option>');
+        $('#e360-plan-options').html('');
         $('#e360-time').html('<option value="">Select date first…</option>');
         $('#e360-date').val('');
         $('#e360-step-course').show();
@@ -1209,6 +1400,28 @@ jQuery(function($) {
         $('#e360-step-time').hide();
     }
 
+    function moveOfferUiToStorage() {
+        const $ui = $('#e360-inline-offer-ui');
+        const $storage = $('#e360-offer-storage');
+        if ($ui.length && $storage.length && !$storage.find('#e360-inline-offer-ui').length) {
+            $storage.append($ui);
+        }
+        $('.e360-teacher-offer-host').hide().empty();
+    }
+
+    function mountOfferUiIntoSelectedTeacherCard() {
+        const $selectedCard = $('.e360-teacher-card.e360-teacher-selected').first();
+        const $host = $selectedCard.find('.e360-teacher-offer-host').first();
+        const $ui = $('#e360-inline-offer-ui');
+
+        if (!$selectedCard.length || !$host.length || !$ui.length) {
+            moveOfferUiToStorage();
+            return;
+        }
+
+        $host.show().append($ui);
+    }
+
     function scrollStepTitleIntoView(stepSelector) {
         const $title = $(stepSelector).find('.e360-step-title').first();
         if (!$title.length) return;
@@ -1232,6 +1445,127 @@ jQuery(function($) {
         $('#e360-wizard .e360-validation-error-section').removeClass('e360-validation-error-section');
     }
 
+    function buildTeacherIntroVideoMarkup(embedUrl, directUrl) {
+        const safeEmbedUrl = (embedUrl || '').toString().trim();
+        const safeDirectUrl = (directUrl || '').toString().trim();
+
+        if (safeEmbedUrl) {
+            return `<div style="border-radius:16px;overflow:hidden;background:#0f1720;">
+                <div style="position:relative;padding-top:56.25%;">
+                    <iframe src="${escapeHtml(safeEmbedUrl)}" title="Teacher intro video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:0;"></iframe>
+                </div>
+            </div>`;
+        }
+
+        if (safeDirectUrl) {
+            const videoUrl = escapeHtml(safeDirectUrl);
+            const isDirectVideo = /\.(mp4|webm|ogg)(\?.*)?$/i.test(safeDirectUrl);
+            if (isDirectVideo) {
+                return `<div style="border-radius:16px;overflow:hidden;background:#0f1720;">
+                    <video controls preload="metadata" style="display:block;width:100%;height:auto;max-height:70vh;">
+                        <source src="${videoUrl}">
+                    </video>
+                </div>`;
+            }
+            return `<div style="padding:12px 0;">
+                <a href="${videoUrl}" target="_blank" rel="noopener noreferrer" class="tutor-btn tutor-btn-primary">Open intro video</a>
+            </div>`;
+        }
+
+        return '<div style="color:#5f6b7a;">Video is not available.</div>';
+    }
+
+    function openTeacherIntroVideoModal(teacherName, embedUrl, directUrl) {
+        $('#e360-teacher-video-title').text(teacherName ? (teacherName + ' · Intro video') : 'Teacher intro video');
+        $('#e360-teacher-video-content').html(buildTeacherIntroVideoMarkup(embedUrl, directUrl));
+        $('#e360-teacher-video-modal').show();
+    }
+
+    function closeTeacherIntroVideoModal() {
+        $('#e360-teacher-video-content').html('');
+        $('#e360-teacher-video-modal').hide();
+    }
+
+    function renderTeacherSchedulePreviewHtml(data, teacherId) {
+        if (!data || !data.days) {
+            return '<em>No schedule</em>';
+        }
+
+        let s = '<div style="font-weight:600;margin-bottom:4px;">Next 7 days</div>';
+        if (data.timezone) {
+            s += `<div style="margin-bottom:10px;font-size:13px;color:#5f6b7a;">All times are shown in your timezone: <strong>${escapeHtml(data.timezone)}</strong>.</div>`;
+        }
+        s += '<div class="e360-days-grid" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;">';
+
+        data.days.forEach(function(d) {
+            const dateObj = new Date(d.date);
+            const weekday = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+            const day = d.date.slice(5);
+            const daySelected = (selected.slots || []).some(function(s) {
+                return s && s.date === d.date;
+            });
+            const dayBorder = daySelected ? '#3e64de' : '#eee';
+            s += `<div class="e360-day-card" data-date="${escapeHtml(d.date)}" style="border:1px solid ${dayBorder};border-radius:10px;padding:6px;">
+                    <div style="font-size:12px;opacity:.8;">${escapeHtml(weekday)}, ${escapeHtml(day)}</div>`;
+            if (d.times && d.times.length) {
+                s += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">';
+                d.times.forEach(function(t) {
+                    const isActive = (selected.slots || []).some(function(s) {
+                        return s && s.date === d.date && s.time === t;
+                    });
+                    const btnStyle = isActive ?
+                        'border:1px solid #3e64de;background:#eef3ff;color:#1f3fb4;' :
+                        'border:1px solid #ddd;background:#fff;color:#222;';
+                    const btnClass = isActive ? 'e360-slot-btn e360-slot-active' : 'e360-slot-btn';
+                    s += `<button type="button" class="${btnClass}" data-date="${escapeHtml(d.date)}" data-time="${escapeHtml(t)}" data-teacher-id="${escapeHtml(String(teacherId || ''))}" style="font-size:12px;padding:2px 6px;border-radius:999px;cursor:pointer;${btnStyle}">${escapeHtml(t)}</button>`;
+                });
+                s += '</div>';
+            } else {
+                s += '<div style="font-size:12px;opacity:.6;margin-top:6px;">—</div>';
+            }
+            s += '</div>';
+        });
+
+        s += '</div>';
+        s += '<div style="margin-top:12px;font-size:15px;font-weight:600;line-height:1.5;color:#15314b;">Click a time slot to select your lesson day and time.</div>';
+        return s;
+    }
+
+    function fetchTeacherSchedulePreview(teacherId) {
+        return $.post(ajaxurl, {
+            action: 'e360_get_schedule_preview_bulk',
+            nonce,
+            duration: selected.duration,
+            include_past_today: 0,
+            teacher_ids: JSON.stringify([teacherId])
+        });
+    }
+
+    function openTeacherScheduleModal(teacherId, teacherName) {
+        if (!teacherId) return;
+        $('#e360-teacher-schedule-title').text(teacherName ? (teacherName + ' · Schedule') : 'Teacher schedule');
+        $('#e360-teacher-schedule-content').html('<em>Loading schedule…</em>');
+        $('#e360-teacher-schedule-modal').show();
+
+        fetchTeacherSchedulePreview(teacherId).done(function(resp) {
+            if (!resp || !resp.success) {
+                $('#e360-teacher-schedule-content').html('<em>Schedule unavailable</em>');
+                return;
+            }
+            const map = resp.data.items || {};
+            const data = map[teacherId];
+            $('#e360-teacher-schedule-content').html(renderTeacherSchedulePreviewHtml(data, teacherId));
+            refreshSelectedScheduleUi();
+        }).fail(function() {
+            $('#e360-teacher-schedule-content').html('<em>Schedule unavailable</em>');
+        });
+    }
+
+    function closeTeacherScheduleModal() {
+        $('#e360-teacher-schedule-content').html('');
+        $('#e360-teacher-schedule-modal').hide();
+    }
+
     function syncSelectedSlotsToInputs() {
         if (selected.slots.length) {
             selected.date = selected.slots[0].date;
@@ -1253,7 +1587,7 @@ jQuery(function($) {
     }
 
     function renderPlansByKind(planKind) {
-        const $plan = $('#e360-plan');
+        const $planOptions = $('#e360-plan-options');
         const trialItems = plansIndex.filter(function(it) {
             return (it.plan_kind || '') === 'trial';
         });
@@ -1263,25 +1597,31 @@ jQuery(function($) {
 
         if (planKind === 'package') {
             $('#e360-plan-wrap').show();
-            $plan.html('<option value="">Select…</option>');
-            otherItems.forEach(function(it) {
-                $plan.append($('<option>', {
-                    value: it.product_id,
-                    text: it.title + (it.price_text ? ' — ' + it.price_text : '')
-                }));
-            });
+            $planOptions.html('');
             selected.plan_product_id = null;
             if (!otherItems.length) {
                 $('#e360-offer-msg').text('No package products configured.');
             } else {
                 $('#e360-offer-msg').text('');
+                otherItems.forEach(function(it) {
+                    const title = escapeHtml(it.title || 'Package');
+                    const price = it.price_text ? `<div style="margin-top:6px;font-size:14px;color:#15314b;font-weight:600;">${escapeHtml(it.price_text)}</div>` : '';
+                    const credits = parseInt(it.credits_qty || 0, 10) > 0 ? `<div style="margin-top:4px;font-size:12px;color:#617083;">${escapeHtml(String(it.credits_qty))} lessons</div>` : '';
+                    $planOptions.append(
+                        `<button type="button" class="e360-plan-option-card tutor-btn tutor-btn-outline-primary" data-product-id="${escapeHtml(String(it.product_id || ''))}" style="text-align:left;display:block;border-radius:14px;padding:14px;white-space:normal;">
+                            <div style="font-size:15px;font-weight:700;color:#0f1720;">${title}</div>
+                            ${price}
+                            ${credits}
+                        </button>`
+                    );
+                });
             }
             return;
         }
 
         // trial: только "1 lesson subscription"
         $('#e360-plan-wrap').show();
-        $plan.html('<option value="">Select…</option>');
+        $planOptions.html('');
 
         const trialOne = trialItems.find(function(it) {
             return /1\s*lesson\s*subscription/i.test((it.title || '').toString());
@@ -1293,12 +1633,13 @@ jQuery(function($) {
             return;
         }
 
-        $plan.append($('<option>', {
-            value: trialOne.product_id,
-            text: trialOne.title + (trialOne.price_text ? ' — ' + trialOne.price_text : '')
-        }));
-        $plan.val(String(trialOne.product_id));
         selected.plan_product_id = parseInt(trialOne.product_id, 10) || null;
+        $planOptions.html(
+            `<div class="e360-plan-option-card e360-plan-option-card-active" style="border:1px solid #3e64de;background:#eef3ff;border-radius:14px;padding:14px;">
+                <div style="font-size:15px;font-weight:700;color:#0f1720;">${escapeHtml(trialOne.title || 'Trial lesson')}</div>
+                ${trialOne.price_text ? `<div style="margin-top:6px;font-size:14px;color:#15314b;font-weight:600;">${escapeHtml(trialOne.price_text)}</div>` : ''}
+            </div>`
+        );
         $('#e360-offer-msg').text(trialOne.title ? ('Selected: ' + trialOne.title) : '');
     }
 
@@ -1313,13 +1654,7 @@ jQuery(function($) {
         $('.e360-teacher-schedule').not($box).hide().html('');
         $box.show().html('<em>Loading schedule…</em>');
 
-        $.post(ajaxurl, {
-            action: 'e360_get_schedule_preview_bulk',
-            nonce,
-            duration: selected.duration,
-            include_past_today: 0,
-            teacher_ids: JSON.stringify([teacherId])
-        }).done(function(resp) {
+        fetchTeacherSchedulePreview(teacherId).done(function(resp) {
             if (!resp || !resp.success) {
                 $box.html('<em>Schedule unavailable</em>');
                 return;
@@ -1327,56 +1662,36 @@ jQuery(function($) {
 
             const map = resp.data.items || {};
             const data = map[teacherId];
-            if (!data || !data.days) {
-                $box.html('<em>No schedule</em>');
-                return;
-            }
+            $box.html(renderTeacherSchedulePreviewHtml(data, teacherId));
+        }).fail(function() {
+            $box.html('<em>Schedule unavailable</em>');
+        });
+    }
 
-            function escHtml(v) {
-                return $('<div>').text(v || '').html();
-            }
+    function refreshSelectedScheduleUi() {
+        $('.e360-teacher-schedule .e360-day-card, #e360-teacher-schedule-content .e360-day-card').each(function() {
+            const $day = $(this);
+            const date = ($day.data('date') || '').toString();
+            const daySelected = (selected.slots || []).some(function(slot) {
+                return slot && slot.date === date;
+            });
+            $day.css('borderColor', daySelected ? '#3e64de' : '#eee');
+        });
 
-            let s = '<div style="font-weight:600;margin-bottom:4px;">Next 7 days</div>';
-            s +=
-            '<div class="e360-days-grid" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;">';
-
-            data.days.forEach(function(d) {
-                const dateObj = new Date(d.date);
-                const weekday = dateObj.toLocaleDateString('en-US', {
-                    weekday: 'short'
-                });
-                const day = d.date.slice(5);
-                const daySelected = (selected.slots || []).some(function(s) {
-                    return s && s.date === d.date;
-                });
-                const dayBorder = daySelected ? '#3e64de' : '#eee';
-                s += `<div class="e360-day-card" data-date="${escHtml(d.date)}" style="border:1px solid ${dayBorder};border-radius:10px;padding:6px;">
-                        <div style="font-size:12px;opacity:.8;">${escHtml(weekday)}, ${escHtml(day)}</div>`;
-                if (d.times && d.times.length) {
-                    s += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">';
-                    d.times.forEach(function(t) {
-                        const isActive = (selected.slots || []).some(function(s) {
-                            return s && s.date === d.date && s.time === t;
-                        });
-                        const btnStyle = isActive ?
-                            'border:1px solid #3e64de;background:#eef3ff;color:#1f3fb4;' :
-                            'border:1px solid #ddd;background:#fff;color:#222;';
-                        const btnClass = isActive ? 'e360-slot-btn e360-slot-active' :
-                            'e360-slot-btn';
-                        s +=
-                            `<button type="button" class="${btnClass}" data-date="${escHtml(d.date)}" data-time="${escHtml(t)}" style="font-size:12px;padding:2px 6px;border-radius:999px;cursor:pointer;${btnStyle}">${escHtml(t)}</button>`;
-                    });
-                    s += '</div>';
-                } else {
-                    s += '<div style="font-size:12px;opacity:.6;margin-top:6px;">—</div>';
-                }
-                s += '</div>';
+        $('.e360-teacher-schedule .e360-slot-btn, #e360-teacher-schedule-content .e360-slot-btn').each(function() {
+            const $btn = $(this);
+            const date = ($btn.data('date') || '').toString();
+            const time = ($btn.data('time') || '').toString();
+            const isActive = (selected.slots || []).some(function(slot) {
+                return slot && slot.date === date && slot.time === time;
             });
 
-            s += '</div>';
-            s +=
-                '<div style="margin-top:8px;font-size:12px;opacity:.8;">Click a time slot to select lesson day and time.</div>';
-            $box.html(s);
+            $btn.toggleClass('e360-slot-active', isActive);
+            $btn.css({
+                border: isActive ? '1px solid #3e64de' : '1px solid #ddd',
+                background: isActive ? '#eef3ff' : '#fff',
+                color: isActive ? '#1f3fb4' : '#222'
+            });
         });
     }
 
@@ -1415,9 +1730,7 @@ jQuery(function($) {
         }
 
         syncSelectedSlotsToInputs();
-        if (selected.teacher_id) {
-            loadTeacherSchedulePreview(selected.teacher_id);
-        }
+        refreshSelectedScheduleUi();
         $('#e360-msg').text('');
     }
 
@@ -1435,7 +1748,7 @@ jQuery(function($) {
         if (planKind === 'package') {
             selected.repeat = 'weekly';
             $('#e360-repeat').val('weekly');
-            $('#e360-repeat-wrap').show();
+            $('#e360-repeat-wrap').hide();
             if (prevSlots.length) {
                 selected.slots = prevSlots.map(function(slot) {
                     if (!slot || !slot.date || !slot.time) return null;
@@ -1772,7 +2085,7 @@ jQuery(function($) {
         let html = '<div class="e360-teachers">';
         teachers.forEach(function(v) {
             const avatar = v.teacher_avatar ?
-                `<img src="${v.teacher_avatar}" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;">` :
+                `<img src="${v.teacher_avatar}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover;">` :
                 '';
 
             // short snippet removed — keep only full bio behind the Bio button
@@ -1783,35 +2096,97 @@ jQuery(function($) {
                 `<div class="e360-bio-full" style="display:none;margin-top:8px;">${fullBioSafe}</div>` :
                 '';
 
-            const role = v.teacher_role ?
-                `` :
+            const headline = (v.teacher_headline || '').toString().trim();
+            const intro = ((v.teacher_intro || v.teacher_bio || '')).toString().trim();
+            const country = (v.teacher_country || '').toString().trim();
+            const languages = (v.teacher_languages || '').toString().trim();
+            const rating = (v.teacher_rating || '').toString().trim();
+            const price = (v.teacher_price || '').toString().trim();
+            const priceLabel = (v.teacher_price_label || 'lesson').toString().trim();
+            const nativeLanguage = (v.teacher_native_language || '').toString().trim();
+            const introVideo = (v.teacher_intro_video || '').toString().trim();
+            const introVideoEmbed = (v.teacher_intro_video_embed || '').toString().trim();
+            const badges = ((v.teacher_badges || '').toString().split(',')).map(function(item) {
+                return item.trim();
+            }).filter(Boolean);
+            const featured = parseInt(v.teacher_featured, 10) === 1;
+
+            const badgeHtml = []
+                .concat(featured ? ['Featured Tutor'] : [])
+                .concat(badges)
+                .slice(0, 4)
+                .map(function(label) {
+                    return `<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#eef5ff;color:#195ca8;font-size:12px;font-weight:600;">${escapeHtml(label)}</span>`;
+                }).join('');
+
+            const ratingHtml = rating ?
+                `<div style="display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:5px 10px;border-radius:999px;background:#fff7e8;color:#8b5a00;font-size:13px;font-weight:700;">
+                    <span aria-hidden="true" style="color:#f59e0b;font-size:14px;line-height:1;">★</span>
+                    <span>${escapeHtml(rating)}</span>
+                </div>` :
                 '';
 
-            const bioBtn = fullBioSafe ?
-                `<button type="button" class="e360-toggle-bio tutor-btn tutor-btn-outline-primary tutor-btn-sm" style="margin-top:8px;">Bio</button>` :
+            const countryHtml = country ?
+                `<div style="margin-top:8px;color:#5f6b7a;font-size:13px;line-height:1.5;"><strong>Country:</strong> ${escapeHtml(country)}</div>` :
+                '';
+            const languagesHtml = languages ?
+                `<div style="margin-top:6px;color:#5f6b7a;font-size:13px;line-height:1.5;"><strong>Languages:</strong> ${escapeHtml(languages)}</div>` :
+                '';
+            const nativeLanguageHtml = nativeLanguage ?
+                `<div style="margin-top:6px;color:#5f6b7a;font-size:13px;line-height:1.5;"><strong>Native:</strong> ${escapeHtml(nativeLanguage)}</div>` :
                 '';
 
-            const chooseBtn =
-                `<button type="button" class="e360-choose-teacher tutor-btn tutor-btn-primary tutor-btn-sm tutor-ws-nowrap" style="margin-top:8px;">
-            Choose this teacher
-         </button>`;
+            const introHtml = intro ?
+                `<div style="margin-top:10px;color:#2f3b4a;font-size:14px;line-height:1.6;">${escapeHtml(intro)}</div>` :
+                '';
+
+            const hasIntroVideo = !!(introVideoEmbed || introVideo);
+            const introVideoBtn = hasIntroVideo ?
+                `<button type="button" class="e360-watch-intro-video tutor-btn tutor-btn-outline-primary tutor-btn-sm" data-video-embed="${escapeHtml(introVideoEmbed)}" data-video-url="${escapeHtml(introVideo)}" data-teacher-name="${escapeHtml(v.teacher_name || '')}" style="margin-top:8px;">Watch intro video</button>` :
+                '';
+
+            const headlineHtml = headline ?
+                `<div style="margin-top:4px;font-size:14px;font-weight:600;color:#15314b;">${escapeHtml(headline)}</div>` :
+                '';
+
+            const priceHtml = price ?
+                `<div style="min-width:132px;text-align:right;">
+                    <div style="font-size:28px;line-height:1;font-weight:700;color:#0f1720;">$${escapeHtml(price)}</div>
+                    <div style="margin-top:6px;font-size:12px;color:#617083;">${escapeHtml(priceLabel)}</div>
+                </div>` :
+                '';
+
+            const scheduleBtn =
+                `<button type="button" class="e360-view-teacher-schedule tutor-btn tutor-btn-outline-primary tutor-btn-sm" data-teacher-id="${escapeHtml(String(v.teacher_id || ''))}" data-teacher-name="${escapeHtml(v.teacher_name || '')}" style="margin-top:8px;">View schedule</button>`;
 
             html += `
         <div class="e360-teacher-card"
              data-teacher-id="${v.teacher_id}"
              data-course-id="${v.course_id}"
-             data-teacher-name="${$('<div>').text(v.teacher_name||'').html()}"
-             style="border:1px solid #ddd;border-radius:12px;padding:10px;">
-            <div class="e360-teacher-main" style="display:flex;gap:10px;align-items:flex-start;">
+             data-teacher-name="${escapeHtml(v.teacher_name || '')}"
+             style="border:1px solid #ddd;border-radius:18px;padding:16px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);box-shadow:0 10px 30px rgba(16,48,78,0.08);">
+            <div class="e360-teacher-main" style="display:flex;gap:14px;align-items:flex-start;justify-content:space-between;">
                 <div class="e360-teacher-photo">${avatar}</div>
                 <div class="e360-teacher-info" style="flex:1;">
-                    <div class="e360-teacher-name" style="font-weight:600;">${$('<div>').text(v.teacher_name || '').html()}</div>
-                    ${role}
-                    ${bioBtn}
-                    ${bioFull}
-
-                    <div style="margin-top:10px;">
-                        ${chooseBtn}
+                    <div style="display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
+                        <div style="flex:1;min-width:220px;">
+                            <div class="e360-teacher-name" style="font-size:20px;line-height:1.2;font-weight:700;color:#0f1720;">${escapeHtml(v.teacher_name || '')}</div>
+                            ${headlineHtml}
+                            ${ratingHtml}
+                            ${badgeHtml ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">${badgeHtml}</div>` : ''}
+                            ${countryHtml}
+                            ${languagesHtml}
+                            ${nativeLanguageHtml}
+                            ${introHtml}
+                        </div>
+                        ${priceHtml}
+                    </div>
+                    <div style="margin-top:8px;">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
+                            ${introVideoBtn}
+                            ${scheduleBtn}
+                        </div>
+                        <div class="e360-teacher-offer-host" style="display:none;"></div>
                     </div>
                 </div>
             </div>
@@ -1822,22 +2197,29 @@ jQuery(function($) {
         html += '</div>';
 
         $('#e360-teacher-list').html(html);
+        moveOfferUiToStorage();
         scrollElementIntoView('#e360-teacher-list', 24);
 
-        // toggle bio
-        $(document).off('click.e360bio').on('click.e360bio', '.e360-toggle-bio', function(e) {
+        $(document).off('click.e360watchvideo').on('click.e360watchvideo', '.e360-watch-intro-video', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            $(this).closest('.e360-teacher-card').find('.e360-bio-full').toggle();
+            const $btn = $(this);
+            openTeacherIntroVideoModal(
+                ($btn.data('teacher-name') || '').toString(),
+                ($btn.data('video-embed') || '').toString(),
+                ($btn.data('video-url') || '').toString()
+            );
         });
 
-        // choose teacher (кнопка)
-        $(document).off('click.e360choosebtn').on('click.e360choosebtn', '.e360-choose-teacher',
-            function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                $(this).closest('.e360-teacher-card').trigger('click');
-            });
+        $(document).off('click.e360viewschedule').on('click.e360viewschedule', '.e360-view-teacher-schedule', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const $btn = $(this);
+            openTeacherScheduleModal(
+                parseInt($btn.data('teacher-id'), 10) || 0,
+                ($btn.data('teacher-name') || '').toString()
+            );
+        });
 
         // card click = select teacher
         $(document).off('click.e360card').on('click.e360card', '.e360-teacher-card', function() {
@@ -1845,9 +2227,13 @@ jQuery(function($) {
                 return;
             }
             clearValidationErrors();
+            const alreadySelected = $(this).hasClass('e360-teacher-selected');
+            if (alreadySelected) {
+                return;
+            }
             $('.e360-teacher-card').removeClass('e360-teacher-selected');
             $(this).addClass('e360-teacher-selected');
-            $('.e360-teacher-schedule').hide().html('');
+            $('.e360-teacher-schedule').not($(this).find('.e360-teacher-schedule')).hide().html('');
 
             const teacherId = parseInt($(this).data('teacher-id'), 10) || 0;
             const courseId = parseInt($(this).data('course-id'), 10) || 0;
@@ -1856,8 +2242,6 @@ jQuery(function($) {
             selected.teacher_id = teacherId || null;
             selected.course_id = courseId || null;
             selected.teacher_name = teacherName || null;
-            selected.plan_kind = null;
-            selected.plan_product_id = null;
             selected.date = null;
             selected.time = null;
             selected.slots = [];
@@ -1865,16 +2249,39 @@ jQuery(function($) {
             $('#e360-date').val('');
             $('#e360-time').html('<option value="">Select date first…</option>');
             $('#e360-offer-msg').text('');
-            $('.e360-purchase-card').removeClass('tutor-btn-primary').addClass(
-                'tutor-btn-outline-primary');
-            $('#e360-step-offer').show();
-            $('#e360-plan-wrap').hide();
+            mountOfferUiIntoSelectedTeacherCard();
             updateTimeStepVisibility();
 
             loadPlans();
             loadTeacherSchedulePreview(teacherId);
-            scrollElementIntoView('#e360-step-offer', 24);
+            scrollElementIntoView(this, 24);
         });
+
+        $(document).off('click.e360videoclose').on('click.e360videoclose', '.e360-teacher-video-close', function(e) {
+            e.preventDefault();
+            closeTeacherIntroVideoModal();
+        });
+
+        $(document).off('click.e360scheduleclose').on('click.e360scheduleclose', '.e360-teacher-schedule-close', function(e) {
+            e.preventDefault();
+            closeTeacherScheduleModal();
+        });
+
+        $(document).off('click.e360videobackdrop').on('click.e360videobackdrop', function(e) {
+            const $modal = $('#e360-teacher-video-modal');
+            if ($modal.length && e.target === $modal.get(0)) {
+                closeTeacherIntroVideoModal();
+            }
+            const $scheduleModal = $('#e360-teacher-schedule-modal');
+            if ($scheduleModal.length && e.target === $scheduleModal.get(0)) {
+                closeTeacherScheduleModal();
+            }
+        });
+
+        const $firstTeacherCard = $('#e360-teacher-list .e360-teacher-card').not('.e360-teacher-card-empty').first();
+        if ($firstTeacherCard.length) {
+            $firstTeacherCard.trigger('click');
+        }
 
     });
 
@@ -1902,9 +2309,12 @@ jQuery(function($) {
         selectPreviewSlot(date, time);
     });
 
-    $('#e360-plan').on('change', function() {
+    $(document).on('click', '.e360-plan-option-card[data-product-id]', function() {
         clearValidationErrors();
-        selected.plan_product_id = parseInt($(this).val(), 10) || null;
+        const productId = parseInt($(this).data('product-id'), 10) || null;
+        selected.plan_product_id = productId;
+        $('.e360-plan-option-card[data-product-id]').removeClass('tutor-btn-primary e360-plan-option-card-active').addClass('tutor-btn-outline-primary');
+        $(this).removeClass('tutor-btn-outline-primary').addClass('tutor-btn-primary e360-plan-option-card-active');
         updateTimeStepVisibility();
 
         if (selected.plan_product_id && selected.date && selected.teacher_id) {
@@ -1985,7 +2395,7 @@ jQuery(function($) {
             $('#e360-purchase-options').addClass('e360-validation-error-section');
         }
         if (!selected.plan_product_id) {
-            $('#e360-plan').addClass('e360-validation-error');
+            $('#e360-plan-options').addClass('e360-validation-error');
             $('#e360-plan-wrap').addClass('e360-validation-error-section');
         }
         if (!selected.date) {
@@ -2078,7 +2488,7 @@ jQuery(function($) {
 
     function loadPlans() {
         if (plansIndex.length) return;
-        $('#e360-plan').html('<option value="">Loading…</option>');
+        $('#e360-plan-options').html('<div style="opacity:.7;">Loading…</div>');
 
         $.post(ajaxurl, {
             action: 'e360_get_plans',
@@ -2086,14 +2496,14 @@ jQuery(function($) {
         }).done(function(resp) {
             if (!resp || !resp.success) {
                 $('#e360-offer-msg').text('Could not load payment options.');
-                $('#e360-plan').html('<option value="">Error</option>');
+                $('#e360-plan-options').html('<div style="opacity:.7;">Error</div>');
                 return;
             }
 
             const items = resp.data.items || [];
             if (!items.length) {
                 $('#e360-offer-msg').text('No payment options are available.');
-                $('#e360-plan').html('<option value="">No packages found</option>');
+                $('#e360-plan-options').html('<div style="opacity:.7;">No packages found</div>');
                 return;
             }
 
@@ -3237,3 +3647,134 @@ add_action('tutor_dashboard/before/wrap', function(){
     if (!e360_is_tutor_availability_page('')) return;
     e360_render_availability_override();
 }, 5);
+
+function e360_render_instructor_front_profile_settings(): void {
+    if (!is_user_logged_in()) {
+        return;
+    }
+
+    if (!current_user_can('tutor_instructor') && !current_user_can('manage_options')) {
+        return;
+    }
+
+    $user_id = get_current_user_id();
+    $fields = e360_get_instructor_front_profile_fields_schema();
+
+    echo '<div class="e360-instructor-card-settings tutor-card" style="margin:0 0 18px;padding:18px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;">';
+    echo '<div style="font-size:20px;font-weight:700;margin-bottom:6px;">Teacher Card Profile</div>';
+    echo '<div style="margin-bottom:14px;color:#6b7280;">Update the information shown on your teacher card.</div>';
+    echo '<div class="e360-instructor-card-settings-msg" style="margin:0 0 12px;"></div>';
+    echo '<div class="e360-instructor-card-settings-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;">';
+
+    foreach ($fields as $meta_key => $field) {
+        $value = get_user_meta($user_id, $meta_key, true);
+        echo '<label style="display:flex;flex-direction:column;gap:6px;">';
+        echo '<span style="font-size:13px;font-weight:600;color:#111827;">' . esc_html($field['label']) . '</span>';
+
+        if ($field['type'] === 'textarea') {
+            echo '<textarea class="tutor-form-control e360-instructor-card-field" rows="4" data-meta-key="' . esc_attr($meta_key) . '" placeholder="' . esc_attr($field['placeholder'] ?? '') . '">' . esc_textarea((string) $value) . '</textarea>';
+        } elseif ($field['type'] === 'checkbox') {
+            echo '<span style="display:flex;align-items:center;gap:8px;height:42px;">';
+            echo '<input type="checkbox" class="e360-instructor-card-field" data-meta-key="' . esc_attr($meta_key) . '" value="1" ' . checked(!empty($value), true, false) . '>';
+            echo '<span style="font-size:13px;color:#4b5563;">Enabled</span>';
+            echo '</span>';
+        } else {
+            $extra = '';
+            if (!empty($field['step'])) $extra .= ' step="' . esc_attr((string) $field['step']) . '"';
+            if (!empty($field['min'])) $extra .= ' min="' . esc_attr((string) $field['min']) . '"';
+            if (!empty($field['max'])) $extra .= ' max="' . esc_attr((string) $field['max']) . '"';
+            echo '<input type="' . esc_attr($field['type']) . '" class="tutor-form-control e360-instructor-card-field" data-meta-key="' . esc_attr($meta_key) . '" value="' . esc_attr((string) $value) . '" placeholder="' . esc_attr($field['placeholder'] ?? '') . '"' . $extra . '>';
+        }
+
+        echo '</label>';
+    }
+
+    echo '</div>';
+    echo '<div style="margin-top:16px;"><button type="button" class="tutor-btn tutor-btn-primary e360-save-instructor-card-settings">Save Profile</button></div>';
+    echo '</div>';
+    ?>
+<script>
+jQuery(function($) {
+    const $box = $('.e360-instructor-card-settings').first();
+    if (!$box.length || $box.data('bound') === 1) return;
+    $box.data('bound', 1);
+
+    const ajaxurl = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
+    const nonce = <?php echo wp_json_encode(wp_create_nonce('e360_instructor_card_settings')); ?>;
+
+    $box.on('click', '.e360-save-instructor-card-settings', function() {
+        const payload = {
+            action: 'e360_save_instructor_card_settings',
+            nonce: nonce
+        };
+
+        $box.find('.e360-instructor-card-field').each(function() {
+            const key = $(this).data('meta-key');
+            if (!key) return;
+            if ($(this).is(':checkbox')) {
+                payload[key] = $(this).is(':checked') ? '1' : '';
+            } else {
+                payload[key] = $(this).val() || '';
+            }
+        });
+
+        const $msg = $box.find('.e360-instructor-card-settings-msg');
+        $msg.text('Saving...').css('color', '#4b5563');
+
+        $.post(ajaxurl, payload).done(function(resp) {
+            if (!resp || !resp.success) {
+                const message = (resp && resp.data && resp.data.message) ? resp.data.message : 'Could not save profile.';
+                $msg.text(message).css('color', '#b91c1c');
+                return;
+            }
+            $msg.text('Profile saved.').css('color', '#047857');
+        }).fail(function() {
+            $msg.text('Could not save profile.').css('color', '#b91c1c');
+        });
+    });
+});
+</script>
+<?php
+}
+
+add_action('tutor_load_dashboard_template_before', function($dashboard_page_name){
+    if ($dashboard_page_name !== 'settings') return;
+    e360_render_instructor_front_profile_settings();
+}, 6, 1);
+
+function e360_handle_save_instructor_card_settings(): void {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Not logged in'], 401);
+    }
+
+    check_ajax_referer('e360_instructor_card_settings', 'nonce');
+
+    if (!current_user_can('tutor_instructor') && !current_user_can('manage_options')) {
+        wp_send_json_error(['message' => 'Forbidden'], 403);
+    }
+
+    $user_id = get_current_user_id();
+    $fields = e360_get_instructor_front_profile_fields_schema();
+
+    foreach ($fields as $meta_key => $field) {
+        $raw = $_POST[$meta_key] ?? '';
+        if ($field['type'] === 'checkbox') {
+            update_user_meta($user_id, $meta_key, !empty($raw) ? '1' : '');
+            continue;
+        }
+
+        $value = is_string($raw) ? wp_unslash($raw) : '';
+        if ($field['type'] === 'textarea') {
+            $value = sanitize_textarea_field($value);
+        } elseif ($field['type'] === 'url') {
+            $value = esc_url_raw($value);
+        } else {
+            $value = sanitize_text_field($value);
+        }
+
+        update_user_meta($user_id, $meta_key, $value);
+    }
+
+    wp_send_json_success(['message' => 'Profile saved.']);
+}
+add_action('wp_ajax_e360_save_instructor_card_settings', 'e360_handle_save_instructor_card_settings');

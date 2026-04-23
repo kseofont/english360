@@ -1,6 +1,12 @@
 <?php
 defined('ABSPATH') || exit;
 
+function e360_activate_plugin() {
+    e360_register_private_learning_post_types();
+    e360_install();
+    flush_rewrite_rules();
+}
+
 function e360_install() {
     global $wpdb;
 

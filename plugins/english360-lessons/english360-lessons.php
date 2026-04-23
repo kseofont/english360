@@ -15,18 +15,18 @@ if (!defined('E360_LESSONS_URL')) {
 }
 
 require_once __DIR__ . '/includes/install.php';
+require_once __DIR__ . '/includes/private-programs.php';
 require_once __DIR__ . '/includes/wc-hooks.php';
 require_once __DIR__ . '/includes/shortcodes.php';
+require_once __DIR__ . '/includes/course-archive-sorting.php';
 require_once __DIR__ . '/includes/admin-order.php';
 require_once __DIR__ . '/includes/student-registration.php';
 require_once __DIR__ . '/includes/credits-functions.php';
 require_once __DIR__ . '/includes/lessons-functions.php';
 require_once __DIR__ . '/includes/teacher-course-sidebar.php';
 require_once __DIR__ . '/includes/admin-credits-ui.php';
+require_once __DIR__ . '/includes/instructor-profile-fields.php';
 require_once __DIR__ . '/includes/students-lessons.php';
 require_once __DIR__ . '/includes/teacher-calendar.php';
 require_once __DIR__ . '/includes/frontend.php';
-
-
-
-register_activation_hook(__FILE__, 'e360_install');
+register_activation_hook(__FILE__, 'e360_activate_plugin');

@@ -1,0 +1,1706 @@
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: Ellen Toolkit\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2022-03-04 19:11+0600\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: \n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 2.4.1\n"
+"X-Loco-Version: 2.4.0; wp-5.4.2\n"
+"X-Poedit-KeywordsList: __;_e;_n:1,2;_x:1,2c;_ex:1,2c;_nx:4c,1,2;esc_attr__;"
+"esc_attr_e;esc_attr_x:1,2c;esc_html__;esc_html_e;esc_html_x:1,2c;"
+"_n_noop:1,2;_nx_noop:3c,1,2;__ngettext_noop:1,2\n"
+"X-Poedit-Basepath: ..\n"
+"X-Poedit-SourceCharset: UTF-8\n"
+"X-Poedit-SearchPath-0: .\n"
+"X-Poedit-SearchPathExcluded-0: acf-rgba-color-picker\n"
+"X-Poedit-SearchPathExcluded-1: redux\n"
+"X-Poedit-SearchPathExcluded-2: assets\n"
+
+#: ellen-toolkit.php:87
+msgid "Ellen"
+msgstr ""
+
+#: ellen-toolkit.php:98
+#, php-format
+msgid "\"%1$s\" requires \"%2$s\" to be installed and activated."
+msgstr ""
+
+#: ellen-toolkit.php:99 ellen-toolkit.php:113 ellen-toolkit.php:128
+msgid "Ellen Toolkit"
+msgstr ""
+
+#: ellen-toolkit.php:100 ellen-toolkit.php:114
+msgid "Elementor"
+msgstr ""
+
+#: ellen-toolkit.php:112 ellen-toolkit.php:127
+#, php-format
+msgid "\"%1$s\" requires \"%2$s\" version %3$s or greater."
+msgstr ""
+
+#: ellen-toolkit.php:129
+msgid "PHP"
+msgstr ""
+
+#: ellen-toolkit.php:252
+msgid "Success Stories Category"
+msgstr ""
+
+#: inc/courses-functions.php:151 widgets/tutor-courses.php:208
+msgid "Get Enrolled"
+msgstr ""
+
+#: inc/courses-functions.php:198 widgets/learnpress/lp-courses.php:155
+msgid "Lifetime access"
+msgstr ""
+
+#: inc/icons.php:66
+msgid "Info Circle"
+msgstr ""
+
+#: inc/icons.php:67
+msgid "Book Open"
+msgstr ""
+
+#: inc/icons.php:68
+msgid "Shopping"
+msgstr ""
+
+#: inc/icons.php:69
+msgid "Dollar"
+msgstr ""
+
+#: inc/icons.php:70
+msgid "Code"
+msgstr ""
+
+#: inc/icons.php:71
+msgid "Flag"
+msgstr ""
+
+#: inc/icons.php:72
+msgid "Camera"
+msgstr ""
+
+#: inc/icons.php:73
+msgid "Layer"
+msgstr ""
+
+#: inc/icons.php:74
+msgid "Flag Checkered"
+msgstr ""
+
+#: inc/icons.php:75
+msgid "Star"
+msgstr ""
+
+#: inc/icons.php:76
+msgid "LLine Chart"
+msgstr ""
+
+#: inc/icons.php:77 inc/icons.php:86
+msgid "Book Reader"
+msgstr ""
+
+#: inc/icons.php:78 inc/icons.php:87
+msgid "Target Lock"
+msgstr ""
+
+#: inc/icons.php:79
+msgid "Thermometer"
+msgstr ""
+
+#: inc/icons.php:80
+msgid "Triangle"
+msgstr ""
+
+#: inc/icons.php:81
+msgid "Font Family"
+msgstr ""
+
+#: inc/icons.php:82
+msgid "Drink"
+msgstr ""
+
+#: inc/icons.php:83
+msgid "First Aid"
+msgstr ""
+
+#: inc/icons.php:84
+msgid "Chart"
+msgstr ""
+
+#: inc/icons.php:85
+msgid "Briefcase"
+msgstr ""
+
+#: inc/icons.php:89 widgets/faq.php:57
+msgid "Search"
+msgstr ""
+
+#: inc/icons.php:90
+msgid "Redo"
+msgstr ""
+
+#: inc/icons.php:91
+msgid "Book"
+msgstr ""
+
+#: inc/icons.php:92
+msgid "Teacher"
+msgstr ""
+
+#: inc/icons.php:93
+msgid "People"
+msgstr ""
+
+#: inc/icons.php:94
+msgid "Technology"
+msgstr ""
+
+#: inc/icons.php:95
+msgid "Idea"
+msgstr ""
+
+#: inc/icons.php:96
+msgid "Laptop"
+msgstr ""
+
+#: inc/icons.php:97
+msgid "Web Programming"
+msgstr ""
+
+#: inc/icons.php:98
+msgid "Megaphone"
+msgstr ""
+
+#: inc/icons.php:99
+msgid "Paint Palette"
+msgstr ""
+
+#: inc/icons.php:100
+msgid "Dumbbell"
+msgstr ""
+
+#: inc/icons.php:101
+msgid "Career"
+msgstr ""
+
+#: inc/icons.php:102
+msgid "Data"
+msgstr ""
+
+#: inc/icons.php:103
+msgid "Diet"
+msgstr ""
+
+#: inc/icons.php:104
+msgid "Photography"
+msgstr ""
+
+#: inc/icons.php:105
+msgid "Arrow Outline"
+msgstr ""
+
+#: inc/icons.php:106
+msgid "Coaching"
+msgstr ""
+
+#: inc/icons.php:107
+msgid "User"
+msgstr ""
+
+#: inc/icons.php:108
+msgid "Essential"
+msgstr ""
+
+#: inc/icons.php:109
+msgid "Map"
+msgstr ""
+
+#: inc/icons.php:110
+msgid "Phone Call"
+msgstr ""
+
+#: inc/icons.php:111
+msgid "Time"
+msgstr ""
+
+#: inc/widgets.php:6
+msgid "Display Random or Recent posts with a small image."
+msgstr ""
+
+#: inc/widgets.php:7
+msgid "Ellen Recent Posts With Image"
+msgstr ""
+
+#: inc/widgets.php:89 inc/widgets.php:208
+msgid "Title:"
+msgstr ""
+
+#: inc/widgets.php:94
+msgid "Number of posts to show:"
+msgstr ""
+
+#: inc/widgets.php:98
+msgid "Mode:"
+msgstr ""
+
+#: inc/widgets.php:100
+msgid "Recent Posts"
+msgstr ""
+
+#: inc/widgets.php:101
+msgid "Random Posts"
+msgstr ""
+
+#: inc/widgets.php:103
+msgid "Post views"
+msgstr ""
+
+#: inc/widgets.php:124
+msgid "Display Contact Info"
+msgstr ""
+
+#: inc/widgets.php:125
+msgid "Ellen Contact Info"
+msgstr ""
+
+#: inc/widgets.php:215
+msgid "Location:"
+msgstr ""
+
+#: inc/widgets.php:222
+msgid "Location Link:"
+msgstr ""
+
+#: inc/widgets.php:229
+msgid "Phone Number:"
+msgstr ""
+
+#: inc/widgets.php:236
+msgid "Number Link:"
+msgstr ""
+
+#: inc/widgets.php:243
+msgid "Email:"
+msgstr ""
+
+#: inc/widgets.php:250
+msgid "Email Link:"
+msgstr ""
+
+#: inc/widgets.php:257
+msgid "Fax:"
+msgstr ""
+
+#: inc/widgets.php:264
+msgid "Fax Link:"
+msgstr ""
+
+#: inc/widgets.php:270
+msgid "Display social icons"
+msgstr ""
+
+#: widgets/about-area.php:20
+msgid "About Area"
+msgstr ""
+
+#: widgets/about-area.php:36
+msgid "About Controls"
+msgstr ""
+
+#: widgets/about-area.php:42 widgets/about-slides.php:43
+#: widgets/banner-four.php:42 widgets/banner-four.php:122
+#: widgets/banner-one.php:42 widgets/banner-three.php:42
+#: widgets/banner-three.php:91 widgets/banner-two.php:42
+#: widgets/banner-two.php:120 widgets/become-an-instructor-two.php:52
+#: widgets/become-an-instructor.php:62 widgets/coming-soon.php:61
+#: widgets/contact-area.php:53 widgets/contact-area.php:88
+#: widgets/cta-area.php:82 widgets/faq.php:38 widgets/faq.php:67
+#: widgets/features-area.php:62 widgets/features-inner.php:66
+#: widgets/funfacts.php:74 widgets/partner.php:44 widgets/section.php:64
+#: widgets/single-success-stories.php:42 widgets/stories-area.php:53
+#: widgets/why-choose-us-area.php:59
+msgid "Title"
+msgstr ""
+
+#: widgets/about-area.php:47
+msgid "We share knowledge with the world"
+msgstr ""
+
+#: widgets/about-area.php:48 widgets/banner-four.php:48
+#: widgets/banner-one.php:48 widgets/banner-three.php:48
+#: widgets/banner-two.php:48 widgets/become-an-instructor-two.php:58
+#: widgets/single-success-stories.php:49
+msgid "Enter your title"
+msgstr ""
+
+#: widgets/about-area.php:53 widgets/banner-four.php:53
+#: widgets/banner-one.php:53 widgets/banner-three.php:53
+#: widgets/banner-two.php:53 widgets/become-an-instructor-two.php:63
+msgid "Title HTML Tag"
+msgstr ""
+
+#: widgets/about-area.php:73 widgets/about-slides.php:51
+#: widgets/banner-four.php:73 widgets/banner-one.php:73
+#: widgets/banner-three.php:73 widgets/banner-two.php:73
+#: widgets/become-an-instructor-two.php:83 widgets/become-an-instructor.php:88
+#: widgets/contact-area.php:79 widgets/contact-area.php:103
+#: widgets/cta-area.php:108 widgets/feedback.php:36 widgets/partner.php:70
+#: widgets/section.php:90 widgets/single-success-stories.php:56
+#: widgets/stories-area.php:79 widgets/why-choose-us-area.php:85
+msgid "Content"
+msgstr ""
+
+#: widgets/about-area.php:75 widgets/about-slides.php:53
+msgid ""
+"Whether you want to learn or to share what you know, you’ve come to the "
+"right place. As a global destination for online learning, we connect people "
+"through knowledge."
+msgstr ""
+
+#: widgets/about-area.php:82 widgets/coming-soon.php:53
+msgid "Background Image"
+msgstr ""
+
+#: widgets/about-area.php:91 widgets/about-slides.php:86
+#: widgets/banner-four.php:195 widgets/banner-one.php:275
+#: widgets/banner-three.php:216 widgets/banner-two.php:194
+#: widgets/become-an-instructor-two.php:41
+#: widgets/become-an-instructor-two.php:204
+#: widgets/become-an-instructor.php:161 widgets/contact-area.php:131
+#: widgets/course-categories-two.php:127 widgets/cta-area.php:174
+#: widgets/faq.php:96 widgets/features-area.php:147
+#: widgets/features-inner.php:42 widgets/features-inner.php:101
+#: widgets/feedback.php:42 widgets/feedback.php:109 widgets/funfacts.php:107
+#: widgets/instructors.php:84 widgets/learnpress/lp-categories.php:92
+#: widgets/learnpress/lp-courses-filter.php:118 widgets/partner.php:151
+#: widgets/section.php:165 widgets/single-success-stories.php:86
+#: widgets/stories-area.php:41 widgets/stories-area.php:210
+#: widgets/success-stories.php:95 widgets/tutor-categories.php:92
+#: widgets/tutor-courses-filter.php:118 widgets/why-choose-us-area.php:151
+msgid "Style"
+msgstr ""
+
+#: widgets/about-area.php:96 widgets/banner-four.php:200
+#: widgets/banner-one.php:280 widgets/banner-three.php:221
+#: widgets/banner-two.php:199
+msgid "Banner Padding"
+msgstr ""
+
+#: widgets/about-area.php:107 widgets/banner-four.php:211
+#: widgets/banner-one.php:291 widgets/banner-three.php:232
+#: widgets/banner-two.php:210
+msgid "Banner Background Color"
+msgstr ""
+
+#: widgets/about-area.php:118 widgets/about-slides.php:93
+#: widgets/banner-four.php:222 widgets/banner-one.php:302
+#: widgets/banner-three.php:243 widgets/banner-two.php:221
+#: widgets/become-an-instructor-two.php:231
+#: widgets/become-an-instructor.php:180 widgets/contact-area.php:159
+#: widgets/course-categories-two.php:156 widgets/cta-area.php:193
+#: widgets/faq.php:103 widgets/features-inner.php:120 widgets/funfacts.php:147
+#: widgets/learnpress/lp-categories.php:121 widgets/partner.php:159
+#: widgets/section.php:194 widgets/single-success-stories.php:94
+#: widgets/stories-area.php:218 widgets/success-stories.php:103
+#: widgets/tutor-categories.php:121 widgets/why-choose-us-area.php:180
+msgid "Title Color"
+msgstr ""
+
+#: widgets/about-area.php:130 widgets/about-slides.php:105
+#: widgets/banner-four.php:234 widgets/banner-one.php:314
+#: widgets/banner-three.php:255 widgets/banner-two.php:233
+#: widgets/become-an-instructor-two.php:243
+#: widgets/become-an-instructor.php:192 widgets/contact-area.php:171
+#: widgets/course-categories-two.php:168 widgets/cta-area.php:205
+#: widgets/faq.php:115 widgets/features-inner.php:132 widgets/funfacts.php:159
+#: widgets/learnpress/lp-categories.php:133 widgets/partner.php:171
+#: widgets/section.php:206 widgets/single-success-stories.php:106
+#: widgets/stories-area.php:230 widgets/success-stories.php:115
+#: widgets/tutor-categories.php:133 widgets/why-choose-us-area.php:192
+msgid "Title Typography"
+msgstr ""
+
+#: widgets/about-area.php:139 widgets/about-slides.php:114
+#: widgets/banner-four.php:243 widgets/banner-one.php:323
+#: widgets/banner-three.php:264 widgets/banner-two.php:242
+#: widgets/become-an-instructor-two.php:252
+#: widgets/become-an-instructor.php:201 widgets/contact-area.php:180
+#: widgets/cta-area.php:214 widgets/partner.php:180 widgets/section.php:215
+#: widgets/single-success-stories.php:115 widgets/stories-area.php:239
+#: widgets/success-stories.php:124 widgets/why-choose-us-area.php:201
+msgid "Content Color"
+msgstr ""
+
+#: widgets/about-area.php:151 widgets/about-slides.php:126
+#: widgets/banner-four.php:255 widgets/banner-one.php:335
+#: widgets/banner-three.php:276 widgets/banner-two.php:254
+#: widgets/become-an-instructor-two.php:264
+#: widgets/become-an-instructor.php:213 widgets/contact-area.php:192
+#: widgets/cta-area.php:226 widgets/partner.php:192 widgets/section.php:227
+#: widgets/single-success-stories.php:127 widgets/stories-area.php:251
+#: widgets/success-stories.php:136 widgets/why-choose-us-area.php:213
+msgid "Content Typography"
+msgstr ""
+
+#: widgets/about-slides.php:20
+msgid "Ellen About Slider"
+msgstr ""
+
+#: widgets/about-slides.php:36
+msgid "About Slider Control"
+msgstr ""
+
+#: widgets/about-slides.php:45
+msgid "About Our Story"
+msgstr ""
+
+#: widgets/about-slides.php:59 widgets/features-area.php:55
+#: widgets/feedback.php:55 widgets/why-choose-us-area.php:43
+msgid "Image"
+msgstr ""
+
+#: widgets/about-slides.php:66 widgets/single-success-stories.php:77
+msgid "YouTube Video Link"
+msgstr ""
+
+#: widgets/about-slides.php:68
+msgid "https://www.youtube.com/watch?v=l-epKcOA7RQ"
+msgstr ""
+
+#: widgets/about-slides.php:75
+msgid "Slider Items"
+msgstr ""
+
+#: widgets/banner-four.php:20
+msgid "Banner Four"
+msgstr ""
+
+#: widgets/banner-four.php:36 widgets/banner-one.php:36
+#: widgets/banner-three.php:36 widgets/banner-two.php:36
+msgid "Banner Controls"
+msgstr ""
+
+#: widgets/banner-four.php:47 widgets/banner-one.php:47
+#: widgets/banner-three.php:47 widgets/banner-two.php:47
+#: widgets/become-an-instructor-two.php:57
+msgid "This is the heading"
+msgstr ""
+
+#: widgets/banner-four.php:75 widgets/banner-one.php:75
+#: widgets/banner-three.php:75 widgets/banner-two.php:75
+msgid ""
+"Flexible easy to access learning opportunities can bring a significant "
+"change in how individuals prefer to learn! The Ellen can offer you to enjoy "
+"the beauty of eLearning!"
+msgstr ""
+
+#: widgets/banner-four.php:83 widgets/banner-one.php:83
+#: widgets/banner-two.php:83
+msgid "Search Button Text"
+msgstr ""
+
+#: widgets/banner-four.php:85 widgets/banner-one.php:85
+#: widgets/banner-two.php:85
+msgid "Search Now"
+msgstr ""
+
+#: widgets/banner-four.php:93 widgets/banner-one.php:93
+#: widgets/banner-two.php:93
+msgid "Search Button Icon"
+msgstr ""
+
+#: widgets/banner-four.php:103 widgets/banner-one.php:103
+#: widgets/banner-two.php:103
+msgid "Course Search Placeholder"
+msgstr ""
+
+#: widgets/banner-four.php:105 widgets/banner-one.php:105
+#: widgets/banner-two.php:105
+msgid "What do you want to learn today?"
+msgstr ""
+
+#: widgets/banner-four.php:112
+msgid "Links Title"
+msgstr ""
+
+#: widgets/banner-four.php:114
+msgid "Popular:"
+msgstr ""
+
+#: widgets/banner-four.php:124
+msgid "Development"
+msgstr ""
+
+#: widgets/banner-four.php:129 widgets/banner-three.php:131
+#: widgets/become-an-instructor-two.php:102
+#: widgets/become-an-instructor.php:115 widgets/course-categories-two.php:88
+#: widgets/cta-area.php:135 widgets/features-area.php:96
+#: widgets/partner.php:97 widgets/section.php:123 widgets/stories-area.php:106
+#: widgets/why-choose-us-area.php:112
+msgid "Button Link Type"
+msgstr ""
+
+#: widgets/banner-four.php:133
+msgid "Link To Category"
+msgstr ""
+
+#: widgets/banner-four.php:134 widgets/banner-one.php:153
+#: widgets/banner-three.php:136 widgets/become-an-instructor-two.php:107
+#: widgets/become-an-instructor.php:120 widgets/course-categories-two.php:93
+#: widgets/cta-area.php:140 widgets/features-area.php:101
+#: widgets/partner.php:102 widgets/section.php:128
+#: widgets/stories-area.php:111 widgets/why-choose-us-area.php:117
+msgid "External Link"
+msgstr ""
+
+#: widgets/banner-four.php:140
+msgid "Button Link Courses Cat"
+msgstr ""
+
+#: widgets/banner-four.php:148 widgets/banner-one.php:174
+#: widgets/banner-three.php:157 widgets/become-an-instructor-two.php:128
+#: widgets/become-an-instructor.php:141 widgets/course-categories-two.php:114
+#: widgets/cta-area.php:161 widgets/features-area.php:122
+#: widgets/partner.php:123 widgets/section.php:152
+#: widgets/stories-area.php:132 widgets/why-choose-us-area.php:138
+msgid "Button External Link"
+msgstr ""
+
+#: widgets/banner-four.php:159
+msgid "Add Link"
+msgstr ""
+
+#: widgets/banner-four.php:170 widgets/banner-one.php:190
+#: widgets/banner-three.php:174 widgets/banner-two.php:152
+#: widgets/become-an-instructor-two.php:155
+msgid "Images"
+msgstr ""
+
+#: widgets/banner-four.php:178 widgets/banner-three.php:182
+#: widgets/banner-two.php:160 widgets/become-an-instructor-two.php:163
+#: widgets/stories-area.php:143
+msgid "Section Image"
+msgstr ""
+
+#: widgets/banner-four.php:185
+msgid "SVG image code"
+msgstr ""
+
+#: widgets/banner-four.php:264 widgets/banner-one.php:344
+#: widgets/banner-two.php:263
+msgid "Search Button Background Color"
+msgstr ""
+
+#: widgets/banner-four.php:275 widgets/banner-one.php:355
+#: widgets/banner-two.php:274
+msgid "Search Button Hover Background Color"
+msgstr ""
+
+#: widgets/banner-four.php:287 widgets/banner-one.php:399
+#: widgets/banner-three.php:361
+msgid "Banner Button Typography"
+msgstr ""
+
+#: widgets/banner-four.php:296
+msgid "Link Title Color"
+msgstr ""
+
+#: widgets/banner-four.php:308
+msgid "Link Title Typography"
+msgstr ""
+
+#: widgets/banner-four.php:317
+msgid "Link Color"
+msgstr ""
+
+#: widgets/banner-four.php:329
+msgid "Link Typography"
+msgstr ""
+
+#: widgets/banner-one.php:20
+msgid "Banner One"
+msgstr ""
+
+#: widgets/banner-one.php:112
+msgid "Support User Images"
+msgstr ""
+
+#: widgets/banner-one.php:120
+msgid "Support Description"
+msgstr ""
+
+#: widgets/banner-one.php:122
+msgid "Need help? Contact our Ellen support Tell us about your query"
+msgstr ""
+
+#: widgets/banner-one.php:129
+msgid "Banner Button Text"
+msgstr ""
+
+#: widgets/banner-one.php:131
+msgid "Discover all courses"
+msgstr ""
+
+#: widgets/banner-one.php:138
+msgid "Banner Button Icon"
+msgstr ""
+
+#: widgets/banner-one.php:148
+msgid "Banner Button Link Type"
+msgstr ""
+
+#: widgets/banner-one.php:152 widgets/banner-three.php:135
+#: widgets/become-an-instructor-two.php:106
+#: widgets/become-an-instructor.php:119 widgets/course-categories-two.php:92
+#: widgets/cta-area.php:139 widgets/features-area.php:100
+#: widgets/partner.php:101 widgets/section.php:127
+#: widgets/stories-area.php:110 widgets/why-choose-us-area.php:116
+msgid "Link To Page"
+msgstr ""
+
+#: widgets/banner-one.php:161
+msgid "Banner Button Link Page"
+msgstr ""
+
+#: widgets/banner-one.php:198
+msgid "Image One"
+msgstr ""
+
+#: widgets/banner-one.php:206
+msgid "Image Two"
+msgstr ""
+
+#: widgets/banner-one.php:214
+msgid "Image Three"
+msgstr ""
+
+#: widgets/banner-one.php:222 widgets/banner-three.php:190
+#: widgets/banner-two.php:168 widgets/become-an-instructor-two.php:171
+#: widgets/blog.php:69 widgets/stories-area.php:151
+msgid "Shape Image One"
+msgstr ""
+
+#: widgets/banner-one.php:230 widgets/banner-two.php:176
+#: widgets/become-an-instructor-two.php:179 widgets/blog.php:77
+#: widgets/stories-area.php:159
+msgid "Shape Image Two"
+msgstr ""
+
+#: widgets/banner-one.php:238 widgets/banner-three.php:198
+#: widgets/banner-three.php:206 widgets/banner-two.php:184
+#: widgets/become-an-instructor-two.php:187 widgets/stories-area.php:167
+msgid "Shape Image Three"
+msgstr ""
+
+#: widgets/banner-one.php:246 widgets/become-an-instructor-two.php:194
+#: widgets/stories-area.php:175
+msgid "Shape Image Four"
+msgstr ""
+
+#: widgets/banner-one.php:255 widgets/stories-area.php:183
+msgid "Shape Image Five"
+msgstr ""
+
+#: widgets/banner-one.php:264 widgets/stories-area.php:191
+msgid "Shape Image Six"
+msgstr ""
+
+#: widgets/banner-one.php:366
+msgid "Support Content Color"
+msgstr ""
+
+#: widgets/banner-one.php:378
+msgid "Support Content Typography"
+msgstr ""
+
+#: widgets/banner-one.php:387
+msgid "Banner Button Color"
+msgstr ""
+
+#: widgets/banner-three.php:20
+msgid "Banner Three"
+msgstr ""
+
+#: widgets/banner-three.php:84 widgets/banner-two.php:113
+#: widgets/funfacts.php:67
+msgid "Ending Number"
+msgstr ""
+
+#: widgets/banner-three.php:92 widgets/banner-two.php:121
+#: widgets/features-inner.php:67 widgets/funfacts.php:75
+msgid "COURSES"
+msgstr ""
+
+#: widgets/banner-three.php:98 widgets/banner-two.php:127
+#: widgets/funfacts.php:81
+msgid "Number Suffix"
+msgstr ""
+
+#: widgets/banner-three.php:104 widgets/banner-two.php:133
+#: widgets/become-an-instructor.php:52 widgets/course-categories-two.php:54
+#: widgets/cta-area.php:72 widgets/features-inner.php:73
+#: widgets/funfacts.php:87 widgets/learnpress/lp-categories.php:54
+#: widgets/tutor-categories.php:54
+msgid "Icon"
+msgstr ""
+
+#: widgets/banner-three.php:113 widgets/banner-two.php:142
+#: widgets/funfacts.php:96
+msgid "Add Counter Item"
+msgstr ""
+
+#: widgets/banner-three.php:122 widgets/become-an-instructor-two.php:93
+#: widgets/become-an-instructor.php:106 widgets/course-categories-two.php:79
+#: widgets/cta-area.php:126 widgets/features-area.php:78
+#: widgets/partner.php:88 widgets/section.php:111 widgets/stories-area.php:97
+#: widgets/why-choose-us-area.php:103
+msgid "Button Text"
+msgstr ""
+
+#: widgets/banner-three.php:124
+msgid "Join For Free"
+msgstr ""
+
+#: widgets/banner-three.php:144 widgets/become-an-instructor-two.php:115
+#: widgets/become-an-instructor.php:128 widgets/course-categories-two.php:101
+#: widgets/cta-area.php:148 widgets/features-area.php:109
+#: widgets/partner.php:110 widgets/section.php:139
+#: widgets/stories-area.php:119 widgets/why-choose-us-area.php:125
+msgid "Button Link Page"
+msgstr ""
+
+#: widgets/banner-three.php:285 widgets/banner-two.php:285
+msgid "FunFacts Number Color"
+msgstr ""
+
+#: widgets/banner-three.php:297 widgets/banner-two.php:297
+msgid "FunFacts Number Typography"
+msgstr ""
+
+#: widgets/banner-three.php:306 widgets/banner-two.php:306
+msgid "FunFacts Title Color"
+msgstr ""
+
+#: widgets/banner-three.php:318 widgets/banner-two.php:318
+msgid "FunFacts Title Typography"
+msgstr ""
+
+#: widgets/banner-three.php:327 widgets/banner-two.php:327
+#: widgets/become-an-instructor.php:254 widgets/cta-area.php:267
+#: widgets/features-inner.php:141 widgets/funfacts.php:168
+#: widgets/learnpress/lp-categories.php:142 widgets/tutor-categories.php:142
+msgid "Icon Color"
+msgstr ""
+
+#: widgets/banner-three.php:338 widgets/partner.php:201
+msgid "Button Color"
+msgstr ""
+
+#: widgets/banner-three.php:349
+msgid "Button Hover Color"
+msgstr ""
+
+#: widgets/banner-two.php:20
+msgid "Banner Two"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:20
+msgid "Become Instructor Two"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:36
+msgid "Become Instructor Two Controls"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:85 widgets/cta-area.php:110
+#: widgets/features-area.php:72 widgets/stories-area.php:81
+#: widgets/why-choose-us-area.php:87
+msgid ""
+"Explore all of our courses and pick your suitable ones to enroll and start "
+"learning with us!"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:95 widgets/become-an-instructor.php:99
+#: widgets/become-an-instructor.php:108
+msgid "Start Teaching Today"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:143
+msgid "Social Title"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:145
+msgid "Follow Us:"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:209
+msgid "Section Padding"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:220
+msgid "Section Background Color"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:273
+#: widgets/become-an-instructor.php:222 widgets/cta-area.php:235
+#: widgets/why-choose-us-area.php:222
+msgid "Button Background Color"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:284
+#: widgets/become-an-instructor.php:233 widgets/cta-area.php:246
+#: widgets/partner.php:212 widgets/section.php:247
+#: widgets/stories-area.php:271 widgets/why-choose-us-area.php:233
+msgid "Button Hover Background Color"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:295
+msgid "Social Title Color"
+msgstr ""
+
+#: widgets/become-an-instructor-two.php:307
+msgid "Social Title Typography"
+msgstr ""
+
+#: widgets/become-an-instructor.php:20
+msgid "Become Instructor"
+msgstr ""
+
+#: widgets/become-an-instructor.php:36 widgets/features-area.php:30
+#: widgets/features-inner.php:36
+msgid "Features Control"
+msgstr ""
+
+#: widgets/become-an-instructor.php:44 widgets/cta-area.php:57
+#: widgets/features-inner.php:56
+msgid "Background Shape Image"
+msgstr ""
+
+#: widgets/become-an-instructor.php:64 widgets/partner.php:46
+#: widgets/section.php:66
+msgid "Online Coaching Lessons For Remote Learning"
+msgstr ""
+
+#: widgets/become-an-instructor.php:71 widgets/contact-area.php:62
+#: widgets/cta-area.php:91 widgets/partner.php:53 widgets/section.php:73
+#: widgets/stories-area.php:62 widgets/why-choose-us-area.php:68
+msgid "Title Tag"
+msgstr ""
+
+#: widgets/become-an-instructor.php:74 widgets/contact-area.php:65
+#: widgets/cta-area.php:94 widgets/partner.php:56 widgets/section.php:76
+#: widgets/stories-area.php:65 widgets/why-choose-us-area.php:71
+msgid "h1"
+msgstr ""
+
+#: widgets/become-an-instructor.php:75 widgets/contact-area.php:66
+#: widgets/cta-area.php:95 widgets/partner.php:57 widgets/section.php:77
+#: widgets/stories-area.php:66 widgets/why-choose-us-area.php:72
+msgid "h2"
+msgstr ""
+
+#: widgets/become-an-instructor.php:76 widgets/contact-area.php:67
+#: widgets/cta-area.php:96 widgets/partner.php:58 widgets/section.php:78
+#: widgets/stories-area.php:67 widgets/why-choose-us-area.php:73
+msgid "h3"
+msgstr ""
+
+#: widgets/become-an-instructor.php:77 widgets/contact-area.php:68
+#: widgets/cta-area.php:97 widgets/partner.php:59 widgets/section.php:79
+#: widgets/stories-area.php:68 widgets/why-choose-us-area.php:74
+msgid "h4"
+msgstr ""
+
+#: widgets/become-an-instructor.php:78 widgets/contact-area.php:69
+#: widgets/cta-area.php:98 widgets/partner.php:60 widgets/section.php:80
+#: widgets/stories-area.php:69 widgets/why-choose-us-area.php:75
+msgid "h5"
+msgstr ""
+
+#: widgets/become-an-instructor.php:79 widgets/contact-area.php:70
+#: widgets/cta-area.php:99 widgets/partner.php:61 widgets/section.php:81
+#: widgets/stories-area.php:70 widgets/why-choose-us-area.php:76
+msgid "h6"
+msgstr ""
+
+#: widgets/become-an-instructor.php:90 widgets/partner.php:72
+#: widgets/section.php:92
+msgid ""
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod "
+"tempor incididunt ut labore et dolore magna aliqua."
+msgstr ""
+
+#: widgets/become-an-instructor.php:97 widgets/cta-area.php:117
+#: widgets/partner.php:79 widgets/section.php:99 widgets/stories-area.php:88
+#: widgets/why-choose-us-area.php:94
+msgid "User Logged in Button Text"
+msgstr ""
+
+#: widgets/become-an-instructor.php:151 widgets/features-inner.php:91
+#: widgets/learnpress/lp-categories.php:82
+#: widgets/learnpress/lp-categories.php:177 widgets/partner.php:141
+#: widgets/tutor-categories.php:82 widgets/tutor-categories.php:177
+msgid "Shape Image"
+msgstr ""
+
+#: widgets/become-an-instructor.php:169 widgets/cta-area.php:182
+#: widgets/features-inner.php:109 widgets/funfacts.php:115
+msgid "Background Color"
+msgstr ""
+
+#: widgets/become-an-instructor.php:245 widgets/cta-area.php:258
+#: widgets/partner.php:224 widgets/section.php:259
+#: widgets/stories-area.php:283 widgets/success-stories.php:146
+#: widgets/why-choose-us-area.php:245
+msgid "Button Typography"
+msgstr ""
+
+#: widgets/blog.php:14 widgets/blog.php:30
+msgid "Blog Post"
+msgstr ""
+
+#: widgets/blog.php:38 widgets/course-categories-two.php:48
+#: widgets/learnpress/lp-categories.php:48
+#: widgets/learnpress/lp-courses-filter.php:75
+#: widgets/learnpress/lp-courses.php:53 widgets/tutor-categories.php:48
+#: widgets/tutor-courses-filter.php:75 widgets/tutor-courses.php:53
+msgid "Select Category"
+msgstr ""
+
+#: widgets/blog.php:47
+msgid "Post Order By"
+msgstr ""
+
+#: widgets/blog.php:50 widgets/instructors.php:55
+#: widgets/learnpress/lp-courses-filter.php:106
+#: widgets/learnpress/lp-courses.php:75 widgets/success-stories.php:75
+#: widgets/tutor-courses-filter.php:106 widgets/tutor-courses.php:75
+msgid "DESC"
+msgstr ""
+
+#: widgets/blog.php:51 widgets/instructors.php:56
+#: widgets/learnpress/lp-courses-filter.php:107
+#: widgets/learnpress/lp-courses.php:76 widgets/success-stories.php:76
+#: widgets/tutor-courses-filter.php:107 widgets/tutor-courses.php:76
+msgid "ASC"
+msgstr ""
+
+#: widgets/blog.php:60 widgets/success-stories.php:85
+msgid "Post Per Page"
+msgstr ""
+
+#: widgets/coming-soon.php:20
+msgid "Coming Soon"
+msgstr ""
+
+#: widgets/coming-soon.php:36
+msgid "Coming Soon Controls"
+msgstr ""
+
+#: widgets/coming-soon.php:45
+msgid "Due Date"
+msgstr ""
+
+#: widgets/coming-soon.php:63
+msgid "We Are Launching Soon"
+msgstr ""
+
+#: widgets/coming-soon.php:69
+msgid "Day Text"
+msgstr ""
+
+#: widgets/coming-soon.php:71
+msgid "Days"
+msgstr ""
+
+#: widgets/coming-soon.php:78
+msgid "Hours Text"
+msgstr ""
+
+#: widgets/coming-soon.php:80
+msgid "Hours"
+msgstr ""
+
+#: widgets/coming-soon.php:87
+msgid "Minutes Text"
+msgstr ""
+
+#: widgets/coming-soon.php:89
+msgid "Minutes"
+msgstr ""
+
+#: widgets/coming-soon.php:96
+msgid "Seconds Text"
+msgstr ""
+
+#: widgets/coming-soon.php:98
+msgid "Seconds"
+msgstr ""
+
+#: widgets/coming-soon.php:105
+msgid "Action URL"
+msgstr ""
+
+#: widgets/coming-soon.php:106
+msgid ""
+"Enter here your MailChimp action URL. <a href=\"https://www.docs.envytheme."
+"com/docs/ellen-theme-documentation/tips-guides-troubleshoots/get-mailchimp-"
+"newsletter-form-action-url/\" target=\"_blank\"> How to </a>"
+msgstr ""
+
+#: widgets/coming-soon.php:114 widgets/faq.php:46
+msgid "Placeholder Text"
+msgstr ""
+
+#: widgets/coming-soon.php:116
+msgid "Enter your email"
+msgstr ""
+
+#: widgets/coming-soon.php:123 widgets/faq.php:55
+msgid "Button text"
+msgstr ""
+
+#: widgets/coming-soon.php:125
+msgid "Subscribe"
+msgstr ""
+
+#: widgets/contact-area.php:20
+msgid "Contact Area"
+msgstr ""
+
+#: widgets/contact-area.php:36
+msgid "Ellen Contact Area"
+msgstr ""
+
+#: widgets/contact-area.php:44 widgets/section.php:55
+#: widgets/why-choose-us-area.php:50
+msgid "Top Title"
+msgstr ""
+
+#: widgets/contact-area.php:46
+msgid "CONTACT DETAILS"
+msgstr ""
+
+#: widgets/contact-area.php:55
+msgid "Get in Touch"
+msgstr ""
+
+#: widgets/contact-area.php:81
+msgid ""
+"Have a inquiry or some feedback for us? Fill out the form below to contact "
+"our team. For partnership and business development inquiries, please "
+"contact us at hello@ellen.com."
+msgstr ""
+
+#: widgets/contact-area.php:90
+msgid "10,000 Online Courses"
+msgstr ""
+
+#: widgets/contact-area.php:95
+msgid "Select Icon"
+msgstr ""
+
+#: widgets/contact-area.php:105
+msgid "2750 Quadra Street Victoria Road, New York, Canada"
+msgstr ""
+
+#: widgets/contact-area.php:112
+msgid "Card Item"
+msgstr ""
+
+#: widgets/contact-area.php:121
+msgid "Contact Image"
+msgstr ""
+
+#: widgets/contact-area.php:138 widgets/section.php:173
+#: widgets/why-choose-us-area.php:159
+msgid "Top Title Color"
+msgstr ""
+
+#: widgets/contact-area.php:150 widgets/section.php:185
+#: widgets/why-choose-us-area.php:171
+msgid "Top Title Typography"
+msgstr ""
+
+#: widgets/contact-area.php:201
+msgid "List Title Color"
+msgstr ""
+
+#: widgets/contact-area.php:213
+msgid "List Title Typography"
+msgstr ""
+
+#: widgets/course-categories-two.php:20
+msgid "Course Categories Two"
+msgstr ""
+
+#: widgets/course-categories-two.php:36
+#: widgets/learnpress/lp-categories.php:36 widgets/tutor-categories.php:36
+msgid "Categories Control"
+msgstr ""
+
+#: widgets/course-categories-two.php:62 widgets/features-inner.php:82
+#: widgets/learnpress/lp-categories.php:63 widgets/tutor-categories.php:63
+msgid "Add Item"
+msgstr ""
+
+#: widgets/course-categories-two.php:71
+msgid "Total Courses Title"
+msgstr ""
+
+#: widgets/course-categories-two.php:81 widgets/cta-area.php:128
+msgid "Register For Free"
+msgstr ""
+
+#: widgets/course-categories-two.php:135
+#: widgets/learnpress/lp-categories.php:100 widgets/tutor-categories.php:100
+msgid "Card Background Color"
+msgstr ""
+
+#: widgets/course-categories-two.php:145
+#: widgets/learnpress/lp-categories.php:110 widgets/tutor-categories.php:110
+msgid "Card Background Color Hover"
+msgstr ""
+
+#: widgets/cta-area.php:20
+msgid "CTA Area"
+msgstr ""
+
+#: widgets/cta-area.php:36
+msgid "Control"
+msgstr ""
+
+#: widgets/cta-area.php:43 widgets/funfacts.php:43
+#: widgets/learnpress/lp-courses-filter.php:44 widgets/section.php:43
+#: widgets/tutor-courses-filter.php:44
+msgid "Select Style"
+msgstr ""
+
+#: widgets/cta-area.php:46 widgets/funfacts.php:46 widgets/section.php:46
+msgid "Style One"
+msgstr ""
+
+#: widgets/cta-area.php:47 widgets/funfacts.php:47 widgets/section.php:47
+msgid "Style Two"
+msgstr ""
+
+#: widgets/cta-area.php:48
+msgid "Style Three"
+msgstr ""
+
+#: widgets/cta-area.php:49
+msgid "Style Four"
+msgstr ""
+
+#: widgets/cta-area.php:64
+msgid "Shape"
+msgstr ""
+
+#: widgets/cta-area.php:84
+msgid "Transform access to education"
+msgstr ""
+
+#: widgets/cta-area.php:119 widgets/features-area.php:89
+msgid "Profile"
+msgstr ""
+
+#: widgets/faq.php:14
+msgid "Ellen FAQ"
+msgstr ""
+
+#: widgets/faq.php:30
+msgid "Faq Control"
+msgstr ""
+
+#: widgets/faq.php:40
+msgid "Ciao! How Can We Help You?"
+msgstr ""
+
+#: widgets/faq.php:48
+msgid "Search a question..."
+msgstr ""
+
+#: widgets/faq.php:69
+msgid "Where should I incorporate my business?"
+msgstr ""
+
+#: widgets/faq.php:75 widgets/features-area.php:70
+msgid "Description"
+msgstr ""
+
+#: widgets/faq.php:77
+msgid ""
+"Ellen is always looking for talented information security and IT risk "
+"management professionals who are dedicated, hard working and looking for a "
+"challenge. If you are interested in employment with Ellen, a company who "
+"values you and your family, visit our careers page.\n"
+"\n"
+"                "
+msgstr ""
+
+#: widgets/faq.php:85
+msgid "Faq Item"
+msgstr ""
+
+#: widgets/faq.php:123
+msgid "FAQ Title Color"
+msgstr ""
+
+#: widgets/faq.php:135
+msgid "FAQ Title Typography"
+msgstr ""
+
+#: widgets/faq.php:143 widgets/feedback.php:117
+msgid "Feedback Color"
+msgstr ""
+
+#: widgets/faq.php:154 widgets/feedback.php:129
+msgid "Feedback Typography"
+msgstr ""
+
+#: widgets/features-area.php:14
+msgid "Ellen Features"
+msgstr ""
+
+#: widgets/features-area.php:38
+msgid "Choose Columns"
+msgstr ""
+
+#: widgets/features-area.php:41
+msgid "1"
+msgstr ""
+
+#: widgets/features-area.php:42
+msgid "2"
+msgstr ""
+
+#: widgets/features-area.php:43
+msgid "3"
+msgstr ""
+
+#: widgets/features-area.php:44
+msgid "4"
+msgstr ""
+
+#: widgets/features-area.php:64
+msgid "Do you want to teach here?"
+msgstr ""
+
+#: widgets/features-area.php:80
+msgid "Register Now"
+msgstr ""
+
+#: widgets/features-area.php:87
+msgid "Logged In Button Text"
+msgstr ""
+
+#: widgets/features-area.php:136
+msgid "Features Item"
+msgstr ""
+
+#: widgets/features-area.php:155
+msgid "Features Title Color"
+msgstr ""
+
+#: widgets/features-area.php:167
+msgid "Features Title Typography"
+msgstr ""
+
+#: widgets/features-area.php:175
+msgid "Features Color"
+msgstr ""
+
+#: widgets/features-area.php:186
+msgid "Features Typography"
+msgstr ""
+
+#: widgets/features-inner.php:20
+msgid "Features Inner"
+msgstr ""
+
+#: widgets/feedback.php:20
+msgid "Feedback"
+msgstr ""
+
+#: widgets/feedback.php:61
+msgid "Name"
+msgstr ""
+
+#: widgets/feedback.php:63
+msgid "Olivar Lucy"
+msgstr ""
+
+#: widgets/feedback.php:69
+msgid "Designation"
+msgstr ""
+
+#: widgets/feedback.php:71
+msgid "Designer"
+msgstr ""
+
+#: widgets/feedback.php:77
+msgid "Feedback Content"
+msgstr ""
+
+#: widgets/feedback.php:79
+msgid ""
+"Lorem ipsum dolor sit amet, consectetur elit, sed do eiusmod tempor "
+"incididunt ut labore et mag na aliqua. Minim veniam, quis nostrud ullamco "
+"laboris nisi ut aliquip ex ea commodo conse quatt adipiscing dolore."
+msgstr ""
+
+#: widgets/feedback.php:86
+msgid "Feedback Item"
+msgstr ""
+
+#: widgets/feedback.php:89
+msgid " Item #1"
+msgstr ""
+
+#: widgets/feedback.php:99
+msgid "Feedback Shape Image"
+msgstr ""
+
+#: widgets/feedback.php:138 widgets/instructors.php:92
+msgid "Name Color"
+msgstr ""
+
+#: widgets/feedback.php:150 widgets/instructors.php:104
+msgid "Name Typography"
+msgstr ""
+
+#: widgets/feedback.php:159 widgets/instructors.php:113
+msgid "Designation Color"
+msgstr ""
+
+#: widgets/feedback.php:171 widgets/instructors.php:125
+msgid "Designation Typography"
+msgstr ""
+
+#: widgets/funfacts.php:20
+msgid "Funfacts"
+msgstr ""
+
+#: widgets/funfacts.php:36
+msgid "Funfacts Control"
+msgstr ""
+
+#: widgets/funfacts.php:55
+msgid "Number Background Shape Image"
+msgstr ""
+
+#: widgets/funfacts.php:126
+msgid "Number Color"
+msgstr ""
+
+#: widgets/funfacts.php:138
+msgid "Number Typography"
+msgstr ""
+
+#: widgets/instructors.php:20
+msgid "LearnPress Instructors"
+msgstr ""
+
+#: widgets/instructors.php:35
+msgid "Ellen Instructors"
+msgstr ""
+
+#: widgets/instructors.php:43
+msgid "Count Instructors"
+msgstr ""
+
+#: widgets/instructors.php:52
+msgid "Order By"
+msgstr ""
+
+#: widgets/instructors.php:66
+msgid "Student Text"
+msgstr ""
+
+#: widgets/instructors.php:73
+msgid "Course Text"
+msgstr ""
+
+#: widgets/instructors.php:175
+#, php-format
+msgid "%s course"
+msgid_plural "%s courses"
+msgstr[0] ""
+msgstr[1] ""
+
+#: widgets/instructors.php:179
+#, php-format
+msgid "%s student"
+msgid_plural "%s students"
+msgstr[0] ""
+msgstr[1] ""
+
+#: widgets/instructors.php:190
+msgid "/5"
+msgstr ""
+
+#: widgets/learnpress/lp-categories.php:20
+msgid "LearnPress Categories"
+msgstr ""
+
+#: widgets/learnpress/lp-categories.php:72 widgets/tutor-categories.php:72
+msgid "Hover Icon"
+msgstr ""
+
+#: widgets/learnpress/lp-courses-filter.php:20
+#: widgets/learnpress/lp-courses-filter.php:36
+msgid "LearnPress Courses Filter"
+msgstr ""
+
+#: widgets/learnpress/lp-courses-filter.php:47
+#: widgets/tutor-courses-filter.php:47
+msgid "Grid"
+msgstr ""
+
+#: widgets/learnpress/lp-courses-filter.php:48
+#: widgets/tutor-courses-filter.php:48
+msgid "Slider"
+msgstr ""
+
+#: widgets/learnpress/lp-courses-filter.php:57
+#: widgets/tutor-courses-filter.php:57
+msgid "All Button Text"
+msgstr ""
+
+#: widgets/learnpress/lp-courses-filter.php:59
+#: widgets/tutor-courses-filter.php:59
+msgid "All"
+msgstr ""
+
+#: widgets/learnpress/lp-courses-filter.php:66
+#: widgets/learnpress/lp-courses-filter.php:84
+#: widgets/tutor-courses-filter.php:66 widgets/tutor-courses-filter.php:84
+msgid "Course Per Tab"
+msgstr ""
+
+#: widgets/learnpress/lp-courses-filter.php:93
+#: widgets/tutor-courses-filter.php:93
+msgid "Add filter nav item"
+msgstr ""
+
+#: widgets/learnpress/lp-courses-filter.php:103
+#: widgets/learnpress/lp-courses.php:72 widgets/tutor-courses-filter.php:103
+#: widgets/tutor-courses.php:72
+msgid "Courses Filter Order By"
+msgstr ""
+
+#: widgets/learnpress/lp-courses-filter.php:126
+#: widgets/tutor-courses-filter.php:126
+msgid "Nav Item Color"
+msgstr ""
+
+#: widgets/learnpress/lp-courses-filter.php:138
+#: widgets/tutor-courses-filter.php:138
+msgid "Nav Item Typography"
+msgstr ""
+
+#: widgets/learnpress/lp-courses.php:20
+msgid "LearnPress Courses"
+msgstr ""
+
+#: widgets/learnpress/lp-courses.php:36
+msgid "LearnPress Course"
+msgstr ""
+
+#: widgets/learnpress/lp-courses.php:44 widgets/tutor-courses.php:44
+msgid "Count Course"
+msgstr ""
+
+#: widgets/learnpress/lp-courses.php:62 widgets/tutor-courses.php:62
+msgid "Add Category to Filter Courses"
+msgstr ""
+
+#: widgets/learnpress/lp-courses.php:152 widgets/tutor-courses.php:183
+msgid "Updated:"
+msgstr ""
+
+#: widgets/learnpress/lp-courses.php:162
+msgid "Total Students: "
+msgstr ""
+
+#: widgets/learnpress/lp-courses.php:163
+msgid "Total Lesson: "
+msgstr ""
+
+#: widgets/partner.php:20 widgets/partner.php:267
+msgid "Partner Logo"
+msgstr ""
+
+#: widgets/partner.php:36
+msgid "Partner Logo Control"
+msgstr ""
+
+#: widgets/partner.php:81 widgets/section.php:101
+msgid "Apply to Become a Teacher"
+msgstr ""
+
+#: widgets/partner.php:90 widgets/section.php:113
+msgid "Start For Free"
+msgstr ""
+
+#: widgets/partner.php:133
+msgid "Add Partner Logos"
+msgstr ""
+
+#: widgets/section.php:20
+msgid "Section"
+msgstr ""
+
+#: widgets/section.php:36
+msgid "Ellen Section"
+msgstr ""
+
+#: widgets/section.php:57
+msgid "Education for everyone"
+msgstr ""
+
+#: widgets/section.php:236 widgets/stories-area.php:260
+msgid "Button Border Color"
+msgstr ""
+
+#: widgets/single-success-stories.php:20
+msgid "Single Success Stories"
+msgstr ""
+
+#: widgets/single-success-stories.php:36
+msgid "Success Stories Controls"
+msgstr ""
+
+#: widgets/single-success-stories.php:47
+msgid ""
+"Alina Smith Story\n"
+"                "
+msgstr ""
+
+#: widgets/single-success-stories.php:65
+msgid "Quote"
+msgstr ""
+
+#: widgets/single-success-stories.php:72
+msgid "Video Button Text"
+msgstr ""
+
+#: widgets/single-success-stories.php:136
+msgid "Quote Color"
+msgstr ""
+
+#: widgets/single-success-stories.php:148
+msgid "Quote Typography"
+msgstr ""
+
+#: widgets/stories-area.php:20
+msgid "Stories Area"
+msgstr ""
+
+#: widgets/stories-area.php:36
+msgid "Ellen Stories Area"
+msgstr ""
+
+#: widgets/stories-area.php:55
+msgid "Affordable online courses and learning opportunities​"
+msgstr ""
+
+#: widgets/stories-area.php:90 widgets/stories-area.php:99
+msgid "View All Stories"
+msgstr ""
+
+#: widgets/stories-area.php:199
+msgid "Shape Image Seven"
+msgstr ""
+
+#: widgets/success-stories.php:14
+msgid "Success Stories"
+msgstr ""
+
+#: widgets/success-stories.php:30
+msgid "Success_Stories"
+msgstr ""
+
+#: widgets/success-stories.php:38
+msgid "Services Style"
+msgstr ""
+
+#: widgets/success-stories.php:41
+msgid "Style 1"
+msgstr ""
+
+#: widgets/success-stories.php:42
+msgid "Style 2"
+msgstr ""
+
+#: widgets/success-stories.php:51
+msgid "Read More Text"
+msgstr ""
+
+#: widgets/success-stories.php:53
+msgid "Read Story"
+msgstr ""
+
+#: widgets/success-stories.php:63
+msgid "Choose Category"
+msgstr ""
+
+#: widgets/success-stories.php:72
+msgid "Services Order By"
+msgstr ""
+
+#: widgets/tutor-categories.php:20
+msgid "Tutor Categories"
+msgstr ""
+
+#: widgets/tutor-courses-filter.php:20 widgets/tutor-courses-filter.php:36
+msgid "Tutor Courses Filter"
+msgstr ""
+
+#: widgets/tutor-courses-filter.php:156 widgets/tutor-courses.php:94
+msgid "Please Install and activated Tutor LMS plugin"
+msgstr ""
+
+#: widgets/tutor-courses-filter.php:251 widgets/tutor-courses-filter.php:328
+#: widgets/tutor-courses-filter.php:418 widgets/tutor-courses-filter.php:501
+#: widgets/tutor-courses.php:167
+msgid "Free"
+msgstr ""
+
+#: widgets/tutor-courses.php:20
+msgid "Tutor Courses"
+msgstr ""
+
+#: widgets/tutor-courses.php:36
+msgid "Tutor Course"
+msgstr ""
+
+#: widgets/why-choose-us-area.php:20
+msgid "Why Choose Us Area"
+msgstr ""
+
+#: widgets/why-choose-us-area.php:36
+msgid "Ellen Why Choose Us"
+msgstr ""
+
+#: widgets/why-choose-us-area.php:52
+msgid "WHY CHOOSE US?"
+msgstr ""
+
+#: widgets/why-choose-us-area.php:61
+msgid "Learn the Latest Top Skills"
+msgstr ""
+
+#: widgets/why-choose-us-area.php:96 widgets/why-choose-us-area.php:105
+msgid "Get Started For Free"
+msgstr ""

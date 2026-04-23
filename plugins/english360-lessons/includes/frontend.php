@@ -72,6 +72,22 @@ add_filter('post_thumbnail_html', function ($html, $post_id, $post_thumbnail_id,
     );
 }, 10, 5);
 
+add_filter('tutor_course_thumbnail_placeholder', function ($placeholder_url, $post_id) {
+    if (!e360_is_tutor_course_post((int) $post_id)) {
+        return $placeholder_url;
+    }
+
+    return e360_course_placeholder_image_url();
+}, 10, 2);
+
+add_filter('tutor_course_thumb_url', function ($src, $post_id, $size, $post_thumbnail_id) {
+    if (!empty($post_thumbnail_id) || !e360_is_tutor_course_post((int) $post_id)) {
+        return $src;
+    }
+
+    return e360_course_placeholder_image_url();
+}, 10, 4);
+
 function e360_course_booking_url(int $course_id): string {
     $args = [
         'course_id' => $course_id,

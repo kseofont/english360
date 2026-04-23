@@ -25,8 +25,8 @@ function e360_get_product_credits_qty(int $product_id): int {
     if ($product_id <= 0) return 0;
 
     $keys = [
-        'e360_credits',
         'e360_credits_qty',
+        'e360_credits',
         'credits_lessons_granted',
         'credits_lessons',
         'lessons_granted',
@@ -39,10 +39,10 @@ function e360_get_product_credits_qty(int $product_id): int {
 
     if (function_exists('get_field')) {
         $acf_keys = [
-            'e360_credits',
             'credits_lessons_granted',
             'credits_lessons',
             'e360_credits_qty',
+            'e360_credits',
         ];
         foreach ($acf_keys as $k) {
             $v = (int) get_field($k, $product_id);
@@ -118,6 +118,41 @@ function e360_spend_credits(int $student_id, int $course_id, int $qty, string $u
     $ledger[] = [
         'ts'     => current_time('mysql'),
         'type'   => 'spend',
+        'qty'    => $qty,
+        'reason' => $unique_lock ?: 'manual',
+        'by'     => get_current_user_id(),
+    ];
+    update_user_meta($student_id, $ledger_key, $ledger);
+
+    return true;
+}
+
+/**
+ * Restore previously spent credits.
+ * $unique_lock should match the lock used in e360_spend_credits().
+ */
+function e360_restore_credits(int $student_id, int $course_id, int $qty, string $unique_lock = ''): bool {
+    if ($qty <= 0) return false;
+
+    $used_key = e360_credits_key_used($course_id);
+    $used = e360_get_credits_used($student_id, $course_id);
+    if ($used <= 0) {
+        return true;
+    }
+
+    update_user_meta($student_id, $used_key, max(0, $used - $qty));
+
+    if ($unique_lock !== '') {
+        $lock_key = 'e360_credit_lock_' . md5($course_id . '|' . $unique_lock);
+        delete_user_meta($student_id, $lock_key);
+    }
+
+    $ledger_key = 'e360_credits_ledger_' . $course_id;
+    $ledger = get_user_meta($student_id, $ledger_key, true);
+    if (!is_array($ledger)) $ledger = [];
+    $ledger[] = [
+        'ts'     => current_time('mysql'),
+        'type'   => 'restore',
         'qty'    => $qty,
         'reason' => $unique_lock ?: 'manual',
         'by'     => get_current_user_id(),

@@ -1,0 +1,475 @@
+/**
+ * Frontend Styles
+ * 
+ * Note: These styles are scoped to our plugin components only
+ * and should not interfere with Tutor LMS default styling
+ */
+
+/* Only style our specific components, not general Tutor classes */
+.tutor-dashboard-content-wrap .tutor-scheduling-availability,
+.tutor-dashboard-content-wrap .tutor-scheduling-bookings,
+.tutor-dashboard-content-wrap .tutor-scheduling-subscriptions,
+.tutor-book-lesson {
+	margin: 20px 0;
+}
+
+.availability-day-row {
+	display: flex;
+	align-items: center;
+	margin-bottom: 15px;
+	padding: 15px;
+	background: #f9f9f9;
+	border-radius: 5px;
+}
+
+.availability-day-row .day-name {
+	flex: 0 0 150px;
+}
+
+.availability-day-row .day-times {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.availability-day-row input[type="time"] {
+	padding: 8px;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+}
+
+/* Use more specific selector to avoid conflicts */
+.tutor-scheduling-bookings .tutor-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-top: 20px;
+}
+
+.tutor-scheduling-bookings .tutor-table th,
+.tutor-scheduling-bookings .tutor-table td {
+	padding: 12px;
+	text-align: left;
+	border-bottom: 1px solid #ddd;
+}
+
+.tutor-scheduling-bookings .tutor-table th {
+	background: #f5f5f5;
+	font-weight: 600;
+}
+
+.status-scheduled {
+	color: #2271b1;
+}
+
+.status-cancelled {
+	color: #d63638;
+}
+
+.status-completed {
+	color: #00a32a;
+}
+
+.status-rescheduled {
+	color: #dba617;
+}
+
+.tutor-alert {
+	padding: 12px;
+	border-radius: 4px;
+	margin: 15px 0;
+}
+
+.tutor-alert-success {
+	background: #d1e7dd;
+	border: 1px solid #badbcc;
+	color: #0f5132;
+}
+
+.tutor-alert-error {
+	background: #f8d7da;
+	border: 1px solid #f5c2c7;
+	color: #842029;
+}
+
+/* Use Tutor's button classes if available, otherwise use our own with specific scope */
+.tutor-scheduling-availability .tutor-btn,
+.tutor-scheduling-bookings .tutor-btn,
+.tutor-book-lesson .tutor-btn {
+	padding: 8px 16px;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	text-decoration: none;
+	display: inline-block;
+}
+
+.tutor-scheduling-availability .tutor-btn-primary,
+.tutor-scheduling-bookings .tutor-btn-primary,
+.tutor-book-lesson .tutor-btn-primary {
+	background: #2271b1;
+	color: #fff;
+}
+
+.tutor-scheduling-availability .tutor-btn-primary:hover,
+.tutor-scheduling-bookings .tutor-btn-primary:hover,
+.tutor-book-lesson .tutor-btn-primary:hover {
+	background: #135e96;
+}
+
+.tutor-scheduling-bookings .tutor-btn-sm {
+	padding: 6px 12px;
+	font-size: 14px;
+	margin-right: 5px;
+}
+
+#reschedule-modal {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: #fff;
+	padding: 30px;
+	border-radius: 8px;
+	box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+	z-index: 10000;
+	max-width: 500px;
+	width: 90%;
+}
+
+#reschedule-modal form p {
+	margin-bottom: 15px;
+}
+
+#reschedule-modal form label {
+	display: block;
+	margin-bottom: 5px;
+	font-weight: 600;
+}
+
+#reschedule-modal form input[type="date"],
+#reschedule-modal form input[type="time"] {
+	width: 100%;
+	padding: 8px;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+}
+
+/* Booking Modal Styles */
+.tutor-modal-overlay {
+	display: none;
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0, 0, 0, 0.7);
+	z-index: 100000;
+	overflow-y: auto;
+}
+
+.tutor-modal-content {
+	position: relative;
+	background: #fff;
+	margin: 50px auto;
+	padding: 30px;
+	border-radius: 8px;
+	max-width: 600px;
+	width: 90%;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.tutor-modal-close {
+	position: absolute;
+	top: 15px;
+	right: 20px;
+	font-size: 28px;
+	font-weight: bold;
+	color: #666;
+	cursor: pointer;
+	line-height: 1;
+}
+
+.tutor-modal-close:hover {
+	color: #000;
+}
+
+.tutor-booking-details {
+	margin: 20px 0;
+}
+
+.booking-detail-row {
+	padding: 12px 0;
+	border-bottom: 1px solid #eee;
+}
+
+.booking-detail-row:last-child {
+	border-bottom: none;
+}
+
+.booking-detail-row strong {
+	display: inline-block;
+	min-width: 120px;
+	color: #333;
+}
+
+.tutor-modal-actions {
+	margin-top: 20px;
+	text-align: right;
+}
+
+/* Calendar booking events */
+.tutor-scheduling-booking-event {
+	cursor: pointer;
+}
+
+.tutor-scheduling-booking-event:hover {
+	opacity: 0.8;
+}
+
+/* Google Meet input in availability page */
+.google-meet-input {
+	width: 100%;
+	padding: 8px;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+}
+
+.tutor-bookings-list {
+	margin-top: 20px;
+}
+
+.tutor-bookings-list .tutor-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.tutor-bookings-list .tutor-table th,
+.tutor-bookings-list .tutor-table td {
+	padding: 12px;
+	text-align: left;
+	border-bottom: 1px solid #ddd;
+}
+
+.tutor-bookings-list .tutor-table th {
+	background: #f5f5f5;
+	font-weight: 600;
+}
+
+/* Booking form in modal */
+.tutor-booking-form {
+	margin: 20px 0;
+}
+
+.booking-form-row {
+	margin-bottom: 20px;
+}
+
+.booking-form-row label {
+	display: block;
+	margin-bottom: 8px;
+	font-weight: 600;
+	color: #333;
+}
+
+.booking-form-row select,
+.booking-form-row input[type="text"],
+.booking-form-row input[type="date"],
+.booking-form-row input[type="time"] {
+	width: 100%;
+	padding: 10px;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	font-size: 14px;
+}
+
+.booking-form-row select:focus,
+.booking-form-row input:focus {
+	outline: none;
+	border-color: #2271b1;
+	box-shadow: 0 0 0 1px #2271b1;
+}
+
+/* Pending bookings section */
+.pending-bookings-section {
+	background: #fff3cd;
+	border: 1px solid #ffc107;
+	border-radius: 4px;
+	padding: 20px;
+	margin-bottom: 30px;
+}
+
+.pending-bookings-section h3 {
+	margin-top: 0;
+	color: #856404;
+}
+
+.status-pending {
+	color: #856404;
+	font-weight: 600;
+}
+
+.status-approved {
+	color: #00a32a;
+	font-weight: 600;
+}
+
+.status-rejected {
+	color: #d63638;
+	font-weight: 600;
+}
+
+/* Calendar date hover effects */
+#tutor_calendar_wrapper .tutor-calendar-body > div:not(.space) {
+	cursor: pointer;
+	transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+#tutor_calendar_wrapper .tutor-calendar-body > div:not(.space):hover {
+	background-color: rgba(34, 113, 177, 0.1);
+	border-radius: 4px;
+	transform: scale(1.05);
+}
+
+#tutor_calendar_wrapper .tutor-calendar-body > div:not(.space) a {
+	cursor: pointer;
+	transition: color 0.2s ease;
+}
+
+#tutor_calendar_wrapper .tutor-calendar-body > div:not(.space):hover a {
+	color: #2271b1;
+	font-weight: 600;
+}
+
+/* Make sure calendar days are clickable */
+#tutor_calendar_wrapper .tutor-calendar-body > div:not(.space):not(.tutor-event-wrapper) {
+	position: relative;
+}
+
+#tutor_calendar_wrapper .tutor-calendar-body > div:not(.space):not(.tutor-event-wrapper):hover::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: rgba(34, 113, 177, 0.1);
+	border-radius: 4px;
+	pointer-events: none;
+	z-index: 1;
+}
+
+/* Booking form modal styles */
+#tutor-booking-form-modal .tutor-modal-content {
+	max-width: 600px;
+}
+
+#tutor-booking-form-modal .form-group {
+	margin-bottom: 20px;
+}
+
+#tutor-booking-form-modal .form-group label {
+	display: block;
+	margin-bottom: 8px;
+	font-weight: 600;
+	color: #333;
+}
+
+#tutor-booking-form-modal .form-group select,
+#tutor-booking-form-modal .form-group input[type="text"],
+#tutor-booking-form-modal .form-group input[type="date"],
+#tutor-booking-form-modal .form-group input[type="time"] {
+	width: 100%;
+	padding: 10px;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	font-size: 14px;
+}
+
+#tutor-booking-form-modal .form-group select:focus,
+#tutor-booking-form-modal .form-group input:focus {
+	outline: none;
+	border-color: #2271b1;
+	box-shadow: 0 0 0 1px #2271b1;
+}
+
+#tutor-booking-form-modal .tutor-modal-actions {
+	margin-top: 25px;
+	display: flex;
+	gap: 10px;
+	justify-content: flex-end;
+}
+
+/* Pending bookings page */
+.tutor-scheduling-pending-bookings .tutor-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-top: 20px;
+}
+
+.tutor-scheduling-pending-bookings .tutor-table th,
+.tutor-scheduling-pending-bookings .tutor-table td {
+	padding: 12px;
+	text-align: left;
+	border-bottom: 1px solid #ddd;
+}
+
+.tutor-scheduling-pending-bookings .tutor-table th {
+	background: #f5f5f5;
+	font-weight: 600;
+}
+
+.tutor-scheduling-pending-bookings .tutor-table td small {
+	color: #666;
+	font-size: 12px;
+}
+
+/* Calendar date hover effects - ONLY for date numbers (links), NOT for calendar background */
+/* Remove any hover effects from calendar cells/divs */
+#tutor_calendar_wrapper .tutor-calendar-body > div:not(.space) {
+	/* No hover effect on the cell itself */
+}
+
+/* Only apply hover to date links (those containing just numbers, not event links) */
+#tutor_calendar_wrapper .tutor-calendar-body > div:not(.space) > a:not([href*="event"]):not([href*="lesson"]):not([href*="material"]) {
+	cursor: pointer !important;
+	transition: all 0.2s ease;
+	display: inline-block;
+	padding: 4px 8px;
+	border-radius: 4px;
+	position: relative;
+}
+
+/* Hover effect only on date links */
+#tutor_calendar_wrapper .tutor-calendar-body > div:not(.space) > a:not([href*="event"]):not([href*="lesson"]):not([href*="material"]):hover {
+	color: #2271b1 !important;
+	font-weight: 600;
+	background-color: rgba(34, 113, 177, 0.15) !important;
+	transform: scale(1.1);
+}
+
+/* Tooltip for date links only */
+#tutor_calendar_wrapper .tutor-calendar-body > div:not(.space) > a:not([href*="event"]):not([href*="lesson"]):not([href*="material"]):hover::after {
+	content: 'Click to book';
+	position: absolute;
+	top: -30px;
+	left: 50%;
+	transform: translateX(-50%);
+	background: #333;
+	color: #fff;
+	padding: 4px 8px;
+	border-radius: 4px;
+	font-size: 11px;
+	white-space: nowrap;
+	z-index: 1000;
+	pointer-events: none;
+	opacity: 0;
+	animation: fadeInTooltip 0.3s ease forwards;
+}
+
+@keyframes fadeInTooltip {
+	to {
+		opacity: 1;
+	}
+}
+

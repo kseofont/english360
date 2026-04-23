@@ -317,7 +317,8 @@ function e360_theme_output_zoom_api_sync(): void {
     function maskValue(value) {
         value = String(value || '');
         if (value.length <= 8) {
-            return value.length ? value.charAt(0) + '*'.repeat(Math.max(value.length - 2, 0)) + value.slice(-1) : '';
+            return value.length ? value.charAt(0) + '*'.repeat(Math.max(value.length - 2, 0)) + value.slice(-1) :
+            '';
         }
         return value.slice(0, 4) + '*'.repeat(value.length - 8) + value.slice(-4);
     }
@@ -389,3 +390,21 @@ function e360_theme_output_zoom_api_sync(): void {
 
 add_action('wp_head', 'e360_theme_output_zoom_api_sync', 99);
 add_action('wp_footer', 'e360_theme_output_zoom_api_sync', 99);
+add_filter('editable_roles', function($roles) {
+
+    $allowed_roles = [
+        'administrator',
+        'subscriber',
+        'tutor_instructor',
+        'simple_admin',
+        'super_admin',
+    ];
+
+    foreach ($roles as $role_key => $role_data) {
+        if (!in_array($role_key, $allowed_roles, true)) {
+            unset($roles[$role_key]);
+        }
+    }
+
+    return $roles;
+});

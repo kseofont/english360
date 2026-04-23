@@ -1,0 +1,10 @@
+(()=>{var e={};/************************************************************************/// The module cache
+var n={};// The require function
+function t(r){// Check if module is in cache
+var i=n[r];if(i!==undefined){return i.exports}// Create a new module (and put it into the cache)
+var o=n[r]={exports:{}};// Execute the module function
+e[r](o,o.exports,t);// Return the exports of the module
+return o.exports}/************************************************************************/// webpack/runtime/rspack_version
+(()=>{t.rv=()=>"1.5.7"})();// webpack/runtime/rspack_unique_id
+(()=>{t.ruid="bundler=rspack@1.5.7"})();/************************************************************************/var r;function i(){if(!r){r=a("meta_data","client")}return r}function o(e){return new Promise((n,t)=>{e.oncomplete=e.onsuccess=()=>n(e.result);e.onabort=e.onerror=()=>t(e.error)})}function a(e,n){var t=indexedDB.open(e);t.onupgradeneeded=()=>t.result.createObjectStore(n);var r=o(t);return(e,t)=>r.then(r=>t(r.transaction(n,e).objectStore(n)))}function s(e){var n=arguments.length>1&&arguments[1]!==void 0?arguments[1]:i();return n("readonly",n=>o(n.get(e)))}function c(e,n){var t=arguments.length>2&&arguments[2]!==void 0?arguments[2]:i();return t("readwrite",t=>{t.put(n,e);return o(t.transaction)})}self.addEventListener("push",function(e){if(!self.registration){console.warn("Notification not Registered.");return}var n=e.data.json();s("client_id").then(e=>{s("browser_key").then(t=>{var r=!n.client_id||!e||n.client_id!=e;var i=!n.browser_key||!t||n.browser_key!=t;if(i||r){return}self.registration.showNotification(n.title,n)})})});self.addEventListener("notificationclick",function(e){if(e.notification.data.url){// Open the specified URL on notification click
+clients.openWindow(e.notification.data.url)}e.notification.close()});self.addEventListener("message",function(e){var n=JSON.parse(e.data);c("client_id",n.client_id).then(()=>{}).catch(e=>console.warn("Client ID saving failed!",e));c("browser_key",n.browser_key).then(()=>{}).catch(e=>console.warn("Browser ID saving failed!",e))})})();

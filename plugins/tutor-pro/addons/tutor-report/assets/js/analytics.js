@@ -1,0 +1,23 @@
+(()=>{var t={};/************************************************************************/// The module cache
+var e={};// The require function
+function a(r){// Check if module is in cache
+var o=e[r];if(o!==undefined){return o.exports}// Create a new module (and put it into the cache)
+var s=e[r]={exports:{}};// Execute the module function
+t[r](s,s.exports,a);// Return the exports of the module
+return s.exports}/************************************************************************/// webpack/runtime/rspack_version
+(()=>{a.rv=()=>"1.5.7"})();// webpack/runtime/rspack_unique_id
+(()=>{a.ruid="bundler=rspack@1.5.7"})();/************************************************************************/window.onload=()=>{var t=document.getElementById("tutor_analytics_search_icon");if(t){t.onclick=()=>{var t=document.getElementById("tutor_analytics_search_form");t.submit()}}var e=document.querySelectorAll(".tutor-admin-report-frequency");for(var a of e){a.onclick=t=>{var e=t.target.dataset.key;if(e==="custom"){return}var a=new URL(window.location.href);var r=a.searchParams;// if(params.has('period') && params.get('period') === period) {
+//     return;
+// }
+if(r.has("start_date")){r.delete("start_date")}if(r.has("end_date")){r.delete("end_date")}r.set("period",e);window.location=a}}/**
+	 * Course progress popup
+	 *
+	 *//**
+	 * Prepare Line Charts for creating dynamically
+	 *
+	 * It will create four graph as mentioned on charts array of obj
+	 *
+	 * @since 1.9.9
+	 */for(var r of _tutor_analytics){var o=document.getElementById("".concat(r.id,"_canvas")).getContext("2d");var s=[];var n=[];var i=[];for(var[l,c]of Object.entries(r.data)){var d={month:"short",day:"numeric"};var u=new Date(c.date_format);var g=u.toLocaleDateString("en-US",d);s.push(g);n.push(c.total);if(c.fees){i.push(c.fees)}}var v=[];v.push({label:r.label,backgroundColor:"#3057D5",borderColor:"#3057D5",data:n,borderWidth:2,fill:false,lineTension:0});if(i.length){v.push({label:r.label2,backgroundColor:"rgba(200, 0, 0, 1)",borderColor:"rgba(200, 0, 0, 1)",data:i,borderWidth:2,fill:false,lineTension:0})}new Chart(o,{type:"line",data:{labels:s,datasets:v},options:{scales:{yAxes:[{ticks:{min:0,beginAtZero:true,callback:function t(t,e,a){if(Math.floor(t)===t){return t}}}}]},legend:{display:false}}})}//modal
+(function t(){document.addEventListener("click",t=>{var e="data-tutor-modal-target";var a="data-tutor-modal-close";var r="tutor-modal-overlay";if(t.target.hasAttribute(e)||t.target.closest("[".concat(e,"]"))){t.preventDefault();var o=t.target.hasAttribute(e)?t.target.getAttribute(e):t.target.closest("[".concat(e,"]")).getAttribute(e);var s=document.getElementById(o);if(s){//modal.classList.add('tutor-is-active');
+}}if(t.target.hasAttribute(a)||t.target.classList.contains(r)||t.target.closest("[".concat(a,"]"))){t.preventDefault();var n=document.querySelectorAll(".tutor-modal.tutor-is-active");n.forEach(t=>{t.classList.remove("tutor-is-active")})}})})()};function r(t){var e="data-tutor-modal-target";var a="data-tutor-modal-close";var r="tutor-modal-overlay";if(t.target.hasAttribute(e)||t.target.closest("[".concat(e,"]"))){t.preventDefault();var o=t.target.hasAttribute(e)?t.target.getAttribute(e):t.target.closest("[".concat(e,"]")).getAttribute(e);var s=document.getElementById(o);if(s){s.classList.add("tutor-is-active")}}if(t.target.hasAttribute(a)||t.target.classList.contains(r)||t.target.closest("[".concat(a,"]"))){t.preventDefault();var n=document.querySelectorAll(".tutor-modal.tutor-is-active");n.forEach(t=>{t.classList.remove("tutor-is-active")})}}jQuery(document).ready(function(t){function e(e){e.preventDefault();var a=e.target;a.classList.add("is-loading");a.setAttribute("disabled","disabled");t.ajax({url:window._tutorobject.ajaxurl,type:"POST",data:{course_id:e.target.dataset.course_id,total_progress:e.target.dataset.total_progress,total_lesson:e.target.dataset.total_lesson,completed_lesson:e.target.dataset.completed_lesson,total_assignment:e.target.dataset.total_assignment,completed_assignment:e.target.dataset.completed_assignment,total_quiz:e.target.dataset.total_quiz,completed_quiz:e.target.dataset.completed_quiz,student_id:e.target.dataset.student_id,action:"view_progress"},beforeSend:function t(){},success:function t(t){document.getElementById("tutor_progress_modal_content").innerHTML=t;var e=document.getElementById("modal-course-overview");e.classList.add("tutor-is-active")},complete:function t(){a.classList.remove("is-loading");a.removeAttribute("disabled");tutorAccordion()}})}t(".analytics_view_course_progress").on("click",function(t){e(t)})})})();

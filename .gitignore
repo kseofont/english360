@@ -5,6 +5,7 @@ themes/ellen/
 wp-config.php
 info.txt
 login.txt
+plan.txt
 
 test.html
 
@@ -17,3 +18,5 @@ Thumbs.db
 .vscode/
 *.log
 
+*.zipbackup_*.zip
+backup/
